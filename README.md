@@ -95,3 +95,4 @@ mysql -u root -h 127.0.0.1 -P 4000
 ## Contributing
 
 Any feedback and contribution is greatly appreciated. Please see [issues](https://github.com/tidb-incubator/tinykv/issues) if you want to join in the development.
+# TinyKV
