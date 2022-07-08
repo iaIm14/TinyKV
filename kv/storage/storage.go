@@ -11,11 +11,12 @@ type Storage interface {
 	Start() error
 	Stop() error
 	Write(ctx *kvrpcpb.Context, batch []Modify) error
+	// Reader Rfinish
 	Reader(ctx *kvrpcpb.Context) (StorageReader, error)
 }
 
 type StorageReader interface {
-	// When the key doesn't exist, return nil for the value
+	// GetCF When the key doesn't exist, return nil for the value
 	GetCF(cf string, key []byte) ([]byte, error)
 	IterCF(cf string) engine_util.DBIterator
 	Close()

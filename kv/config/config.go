@@ -8,11 +8,17 @@ import (
 	"github.com/pingcap-incubator/tinykv/log"
 )
 
+// Config
+// 传给standalone_storage.go 接口使用，传入了数据库的配置信息
 type Config struct {
-	StoreAddr     string
-	Raft          bool
+	// 存储的暴露地址
+	StoreAddr string
+	// 实现Raft
+	Raft bool
+	// 调度向外暴露的地址
 	SchedulerAddr string
-	LogLevel      string
+	// 日志层数 debug 段文件分层的层数？
+	LogLevel string
 
 	DBPath string // Directory to store the data in. Should exist and be writable.
 
@@ -32,6 +38,7 @@ type Config struct {
 	SchedulerHeartbeatTickInterval      time.Duration
 	SchedulerStoreHeartbeatTickInterval time.Duration
 
+	// Region 连续索引区间
 	// When region [a,e) size meets regionMaxSize, it will be split into
 	// several regions [a,b), [b,c), [c,d), [d,e). And the size of [a,b),
 	// [b,c), [c,d) will be regionSplitSize (maybe a little larger).
@@ -71,10 +78,14 @@ func getLogLevel() (logLevel string) {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		SchedulerAddr:            "127.0.0.1:2379",
-		StoreAddr:                "127.0.0.1:20160",
-		LogLevel:                 getLogLevel(),
-		Raft:                     true,
+		// 调度地址
+		SchedulerAddr: "127.0.0.1:2379",
+		// 存储地址
+		StoreAddr: "127.0.0.1:20160",
+
+		LogLevel: getLogLevel(),
+		Raft:     true,
+		// debug project1
 		RaftBaseTickInterval:     1 * time.Second,
 		RaftHeartbeatTicks:       2,
 		RaftElectionTimeoutTicks: 10,
@@ -86,7 +97,8 @@ func NewDefaultConfig() *Config {
 		SchedulerStoreHeartbeatTickInterval: 10 * time.Second,
 		RegionMaxSize:                       144 * MB,
 		RegionSplitSize:                     96 * MB,
-		DBPath:                              "/tmp/badger",
+		// 本地存储磁盘文件位置
+		DBPath: "/tmp/badger",
 	}
 }
 

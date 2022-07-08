@@ -1,6 +1,9 @@
 package storage
 
-// Modify is a single modification to TinyKV's underlying storage.
+// finish
+
+// Modify is a single modification to TinyKV 's underlying storage.
+// 封装对数据库的直接操作
 type Modify struct {
 	Data interface{}
 }

@@ -6,9 +6,20 @@ import (
 	"github.com/pingcap/errors"
 )
 
+// WriteBatch 提供给badger.DB 批量写操作 (.WriteToDB)
 type WriteBatch struct {
-	entries       []*badger.Entry
-	size          int
+	//type badger.Entry struct{
+	//	Key []byte
+	//	Value []byte
+	//	// Usermeta 其他元数据(使用者)
+	//	Usermeta byte
+	//	ExpireAt uint64 // 过期时间
+	//}
+	// entries 存储需要写操作的所有对象的位置
+	entries []*badger.Entry
+	// size entries数量
+	size int
+
 	safePoint     int
 	safePointSize int
 	safePointUndo int
@@ -22,10 +33,12 @@ const (
 
 var CFs [3]string = [3]string{CfDefault, CfWrite, CfLock}
 
+// Len WriteBatch.entries size
 func (wb *WriteBatch) Len() int {
 	return len(wb.entries)
 }
 
+// SetCF
 func (wb *WriteBatch) SetCF(cf string, key, val []byte) {
 	wb.entries = append(wb.entries, &badger.Entry{
 		Key:   KeyWithCF(cf, key),
