@@ -10,8 +10,9 @@ import (
 // Some helper methods can be found in sever.go in the current directory
 
 // RawGet return the corresponding Get response based on RawGetRequest's CF and Key fields
-// 调用链：RawGetRequest作为参数传入Server.RawGet方法，serve
-
+// 调用链：RawGetRequest作为参数传入Server.RawGet方法，server 使用sto age.Reader方法(已经实现)解析req.Context接口得到StorageReader struct
+// 然后用GetCF IterCF Close() 操作完成Get数据读取请求，返回一个[]bytes 类型的value 表示请求的Key对应的值value。使用value构造一个RawGetResponse()
+//
 func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kvrpcpb.RawGetResponse, error) {
 	// Your Code Here (1).
 	reader, err = server.Storage.Reader(req.Context)
@@ -34,7 +35,7 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 
 // RawPut puts the target data into storage and returns the corresponding response
 func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kvrpcpb.RawPutResponse, error) {
-	_ = req.Context
+	// _ = req.Context
 	put := storage.Storage.Write(req.Context)
 	// Your Code Here (1).
 	// Hint: Consider using Storage.Modify to store data to be modified

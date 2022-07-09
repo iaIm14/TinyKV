@@ -11,7 +11,7 @@ type Storage interface {
 	Start() error
 	Stop() error
 	Write(ctx *kvrpcpb.Context, batch []Modify) error
-	// Reader Rfinish
+	// Reader finish
 	Reader(ctx *kvrpcpb.Context) (StorageReader, error)
 }
 

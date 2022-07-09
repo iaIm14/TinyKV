@@ -56,12 +56,13 @@ type StandAloneReader struct {
 	txn *badger.Txn
 }
 
+// 调用engine_util 工具函数 从StandAloneReader.Txn返回一个符合Txn事务查询的值
 func (r *StandAloneReader) GetCF(cf string, key []byte) ([]byte, error) {
 	ret, err := engine_util.GetCFFromTxn(r.txn, cf, key)
 	if err != nil {
 		return nil, nil
 	}
-	return ret, nil
+return ret, nil
 }
 func (r *StandAloneReader) IterCF(cf string) engine_util.DBIterator {
 	return engine_util.NewCFIterator(cf, r.txn)

@@ -25,6 +25,7 @@ type WriteBatch struct {
 	safePointUndo int
 }
 
+// debug ?? unknown
 const (
 	CfDefault string = "default"
 	CfWrite   string = "write"
@@ -38,7 +39,7 @@ func (wb *WriteBatch) Len() int {
 	return len(wb.entries)
 }
 
-// SetCF
+// SetCF的CF带一对将键值对
 func (wb *WriteBatch) SetCF(cf string, key, val []byte) {
 	wb.entries = append(wb.entries, &badger.Entry{
 		Key:   KeyWithCF(cf, key),
