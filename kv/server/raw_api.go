@@ -106,6 +106,7 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 			Key:   iter.Item().Key(),
 			Value: value,
 		})
+		iter.Next()
 	}
 	return ret, nil
 }
