@@ -56,13 +56,13 @@ type StandAloneReader struct {
 	txn *badger.Txn
 }
 
-// 调用engine_util 工具函数 从StandAloneReader.Txn返回一个符合Txn事务查询的值
+// GetCF 调用engine_util 工具函数 从StandAloneReader.Txn返回一个符合Txn事务查询的值
 func (r *StandAloneReader) GetCF(cf string, key []byte) ([]byte, error) {
 	ret, err := engine_util.GetCFFromTxn(r.txn, cf, key)
 	if err != nil {
 		return nil, nil
 	}
-return ret, nil
+	return ret, nil
 }
 func (r *StandAloneReader) IterCF(cf string) engine_util.DBIterator {
 	return engine_util.NewCFIterator(cf, r.txn)
@@ -78,32 +78,45 @@ func NewStandAloneReader(txn *badger.Txn) *StandAloneReader {
 }
 
 // Reader use badger.Txn only
+// 使用DB.NewTransaction(false) 创建只读事务txn 并且调用NewStandAloneReader返回一个StorageReader==StandAloneReader，
+// 实现了GetCF&IterCF&Close三个接口
 func (s *StandAloneStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader, error) {
 	// Your Code Here (1).
 	_ = ctx
+	// key:= left
 	txn := s.engines.Kv.NewTransaction(false)
 	return NewStandAloneReader(txn), nil
 	//return nil, nil
 }
 
 // Write 还要使用util实现的功能函数
+// Note 1
+// 接收Modify struct 的数组存储多个不同操作，使用badger.DB.Newtransaction创建一个新的读写事务txn，
+// 遍历整个batch数组的每一个元素，取得Key&Value&CF ，使用这三个新建一个Entry并且使用SetEntry设置到txn中,
+// fault: 使用badger.txn建立调用NewStandAloneStorage 新建了StandAloneStorage，调用Write方法。
+// 使用engine_util 中实现的具体接口更新StandAloneStorage.engines.kv(badger.DB)(由于要添加CF 支持，不需要直接调用DB.Update Set 等操作)
 func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error {
 	_ = ctx
 	// Your Code Here (1).
-	txn := s.engines.Kv.Newtransaction(true) // write
-	key := batch.Key()
-	val := batch.Value()
-	cf := batch.Cf()
-	err := txn.SetEntry(key, val)
-	if err != nil {
-		return err
+	//txn := s.Engines.Kv.NewTransaction(true) // write
+	//for _, v := range batch {
+	//	key := batch.Key()
+	//	val := batch.Value()
+	//	cf := batch.Cf()
+	//
+	//	err := txn.SetEntry(key, val)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+	for _, v := range batch {
+		switch v.Data.(type) {
+		case storage.Put:
+			engine_util.PutCF(s.engines.Kv, v.Cf(), v.Key(), v.Value())
+		case storage.Delete:
+			engine_util.DeleteCF(s.engines.Kv, v.Cf(), v.Key())
+		}
 	}
-	switch batch.Data.(type) {
-	case storage.Put:
-		engine_util.PutCF(s.engines.Kv, cf, key, val)
-	case storage.Delete:
-		engine_util.DeleteCF(s.engines.Kv, cf, key)
-	}
-	txn.Discard() // debug
+	//txn.Discard() // debug
 	return nil
 }

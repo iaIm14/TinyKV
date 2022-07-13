@@ -15,9 +15,9 @@ import (
 //
 func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kvrpcpb.RawGetResponse, error) {
 	// Your Code Here (1).
-	reader, err = server.Storage.Reader(req.Context)
+	reader, err = server.Storage.Reader(req)
 	if err != nil {
-		return &kvrpcpb.RawGetResponse{}, nil
+		return &kvrpcpb.RawGetResponse{}, nilerr
 	}
 	value, err = reader.GetCF(req.Cf, req.Key)
 	if err != nil {
@@ -34,25 +34,65 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 }
 
 // RawPut puts the target data into storage and returns the corresponding response
+// 表层的RawAPI 使用Server==StandAloneServer 的Write方法更新db，使用WriteBatch构造Modify[]数组
 func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kvrpcpb.RawPutResponse, error) {
 	// _ = req.Context
-	put := storage.Storage.Write(req.Context)
+	var batch []*storage.Modify
+	batch = append(batch, &storage.Modify{
+		Data: storage.Put{
+			Key:   req.Key,
+			Value: req.Value,
+			Cf:    req.Cf,
+		},
+	})
+	err := server.storage.Write(req.Context, batch)
+	if err != nil {
+		// left  v.Cf(), v.Key(),
+		return &kvrpcpb.RawPutResponse{}, err
+	}
+	return &kvrpcpb.RawPutResponse{}, err
 	// Your Code Here (1).
 	// Hint: Consider using Storage.Modify to store data to be modified
 
-	return nil, nil
 }
 
 // RawDelete delete the target data from storage and returns the corresponding response
 func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest) (*kvrpcpb.RawDeleteResponse, error) {
 	// Your Code Here (1).
 	// Hint: Consider using Storage.Modify to store data to be deleted
-	return nil, nil
+	var batch []*storage.Modify
+	batch = append(batch, &storage.Modify{
+		Data: storage.Delete{
+			Key: req.Key,
+			Cf:  req.Cf,
+		},
+	})
+	err := server.storage.Write(req.Context, batch)
+	if err != nil {
+		return &kvrpcpb.RawDeleteResponse{}, err
+	}
+	return &kvrpcpb.RawDeleteResponse{}, nil
 }
 
 // RawScan scan the data starting from the start key up to limit. and return the corresponding result
 func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*kvrpcpb.RawScanResponse, error) {
 	// Your Code Here (1).
 	// Hint: Consider using reader.IterCF
-	return nil, nil
+	ret := &kvrpcpb.RawScanResponse{}
+	reader, err = server.Storage.Reader(req)
+	if err != nil {
+		return &kvrpcpb.RawScanResponse{}, err
+	}
+	iter := reader.IterCF(req.Cf)
+	for {
+		if iter.Valid() == false {
+			iter.Close()
+			break
+		}
+		ret.Kvs = append(ret.Kvs, &KvPair{
+			Key:   iter.Item().Key(),
+			Value: iter.Item().Value(),
+		})
+	}
+	return ret, nil
 }

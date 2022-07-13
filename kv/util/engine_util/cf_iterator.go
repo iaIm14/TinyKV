@@ -4,6 +4,7 @@ import (
 	"github.com/Connor1996/badger"
 )
 
+// CFItem 封装 *badger.Item，prefixlen记录CF前缀的长度
 type CFItem struct {
 	item      *badger.Item
 	prefixLen int
@@ -54,6 +55,7 @@ func (i *CFItem) UserMeta() []byte {
 	return i.item.UserMeta()
 }
 
+// BadgerIterator 封装badger.Iterator prefix:cf_
 type BadgerIterator struct {
 	iter   *badger.Iterator
 	prefix string
