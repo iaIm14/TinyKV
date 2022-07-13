@@ -15,11 +15,11 @@ import (
 //
 func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kvrpcpb.RawGetResponse, error) {
 	// Your Code Here (1).
-	reader, err = server.Storage.Reader(req)
+	reader, err := server.storage.Reader(req.Context)
 	if err != nil {
-		return &kvrpcpb.RawGetResponse{}, nilerr
+		return &kvrpcpb.RawGetResponse{}, err // nil
 	}
-	value, err = reader.GetCF(req.Cf, req.Key)
+	value, err := reader.GetCF(req.Cf, req.Key)
 	if err != nil {
 		return &kvrpcpb.RawGetResponse{}, nil
 	}
@@ -37,8 +37,8 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 // 表层的RawAPI 使用Server==StandAloneServer 的Write方法更新db，使用WriteBatch构造Modify[]数组
 func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kvrpcpb.RawPutResponse, error) {
 	// _ = req.Context
-	var batch []*storage.Modify
-	batch = append(batch, &storage.Modify{
+	var batch []storage.Modify
+	batch = append(batch, storage.Modify{
 		Data: storage.Put{
 			Key:   req.Key,
 			Value: req.Value,
@@ -60,8 +60,8 @@ func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kv
 func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest) (*kvrpcpb.RawDeleteResponse, error) {
 	// Your Code Here (1).
 	// Hint: Consider using Storage.Modify to store data to be deleted
-	var batch []*storage.Modify
-	batch = append(batch, &storage.Modify{
+	var batch []storage.Modify
+	batch = append(batch, storage.Modify{
 		Data: storage.Delete{
 			Key: req.Key,
 			Cf:  req.Cf,
@@ -79,7 +79,7 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 	// Your Code Here (1).
 	// Hint: Consider using reader.IterCF
 	ret := &kvrpcpb.RawScanResponse{}
-	reader, err = server.Storage.Reader(req)
+	reader, err := server.storage.Reader(req.Context)
 	if err != nil {
 		return &kvrpcpb.RawScanResponse{}, err
 	}
@@ -89,9 +89,10 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 			iter.Close()
 			break
 		}
-		ret.Kvs = append(ret.Kvs, &KvPair{
+		value, _ := iter.Item().Value()
+		ret.Kvs = append(ret.Kvs, &kvrpcpb.KvPair{
 			Key:   iter.Item().Key(),
-			Value: iter.Item().Value(),
+			Value: value,
 		})
 	}
 	return ret, nil

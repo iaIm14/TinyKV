@@ -88,7 +88,7 @@ func (Action) EnumDescriptor() ([]byte, []int) {
 }
 
 // Raw commands.
-type RawGetRquest struct {
+type RawGetRequest struct {
 	Context              *Context `protobuf:"bytes,1,opt,name=context" json:"context,omitempty"`
 	Key                  []byte   `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	Cf                   string   `protobuf:"bytes,3,opt,name=cf,proto3" json:"cf,omitempty"`
