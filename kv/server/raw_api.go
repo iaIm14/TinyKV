@@ -17,18 +17,24 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 	// Your Code Here (1).
 	reader, err := server.storage.Reader(req.Context)
 	if err != nil {
-		return &kvrpcpb.RawGetResponse{}, err // nil
+		return &kvrpcpb.RawGetResponse{
+			NotFound: true,
+		}, nil
 	}
 	value, err := reader.GetCF(req.Cf, req.Key)
 	if err != nil {
-		return &kvrpcpb.RawGetResponse{}, nil
+		return &kvrpcpb.RawGetResponse{
+			NotFound: true,
+		}, nil
+	}
+	if value == nil {
+		return &kvrpcpb.RawGetResponse{
+			NotFound: true,
+		}, nil
 	}
 	ret := &kvrpcpb.RawGetResponse{
 		Value:    value,
 		NotFound: false,
-	}
-	if value == nil {
-		return &kvrpcpb.RawGetResponse{}, nil
 	}
 	return ret, nil
 }
@@ -84,7 +90,13 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 		return &kvrpcpb.RawScanResponse{}, err
 	}
 	iter := reader.IterCF(req.Cf)
-	for {
+	iter.Seek(req.StartKey)
+	if iter.Valid() == false {
+		iter.Close()
+		return &kvrpcpb.RawScanResponse{}, nil
+	}
+	limit := req.Limit
+	for v := 1; v <= int(limit); v++ {
 		if iter.Valid() == false {
 			iter.Close()
 			break

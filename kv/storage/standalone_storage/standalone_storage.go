@@ -6,6 +6,7 @@ import (
 	"github.com/pingcap-incubator/tinykv/kv/storage"
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
+	"path"
 )
 
 // StandAloneStorage is an implementation of `Storage` for a single-node TinyKV instance. It does not
@@ -19,15 +20,17 @@ type StandAloneStorage struct {
 
 func NewStandAloneStorage(conf *config.Config) *StandAloneStorage {
 	if conf != nil {
+		kvPath := path.Join(conf.DBPath, "KV")
+		raftPath := path.Join(conf.DBPath, "Raft")
 		ret := &StandAloneStorage{
 			Conf:   conf,
 			Status: false,
 			engines: engine_util.NewEngines(
-				engine_util.CreateDB(conf.DBPath, false),
+				engine_util.CreateDB(kvPath, false),
 				// badger.DB.Open(badger.DefaultOptions(conf.DBPath)),
-				engine_util.CreateDB(conf.DBPath, true),
-				conf.DBPath,
-				conf.DBPath,
+				engine_util.CreateDB(raftPath, true),
+				kvPath,
+				raftPath,
 			),
 			// debug
 		}
