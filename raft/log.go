@@ -50,6 +50,7 @@ type RaftLog struct {
 	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
+	offset uint64
 }
 
 // newLog returns log using the given storage. It recovers the log
@@ -76,6 +77,7 @@ func newLog(storage Storage) *RaftLog {
 	ret.committed = firstIndex - 1
 	ret.applied = firstIndex - 1
 	ret.stabled = lastIndex
+	ret.offset = firstIndex
 	return ret
 }
 
@@ -124,15 +126,22 @@ func (l *RaftLog) LastIndex() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-	if dummyEntry, _ := l.storage.FirstIndex(); i < dummyEntry-1 || i > l.LastIndex() {
+	//if dummyEntry, _ := l.storage.FirstIndex(); i < dummyEntry-1 || i > l.LastIndex() {
+	//	return 0, nil
+	//}
+	////if firstIndex, _ := l.storage.FirstIndex(); len(l.entries) != 0 && i >= firstIndex {
+	////	return l.Term(i-firstIndex)
+	////}
+	//ret, err := l.storage.Term(i)
+	//if err != nil {
+	//	return 0, err
+	//}
+	//return ret, nil
+	if i > l.LastIndex() {
 		return 0, nil
 	}
-	//if firstIndex, _ := l.storage.FirstIndex(); len(l.entries) != 0 && i >= firstIndex {
-	//	return l.Term(i-firstIndex)
-	//}
-	ret, err := l.storage.Term(i)
-	if err != nil {
-		return 0, err
+	if len(l.entries) > 0 && i >= l.offset {
+		return l.entries[i-l.offset].Term, nil
 	}
-	return ret, nil
+	return l.storage.Term(i)
 }
