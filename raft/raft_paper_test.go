@@ -60,9 +60,7 @@ func testUpdateTermFromMessage(t *testing.T, state StateType) {
 		r.becomeCandidate()
 		r.becomeLeader()
 	}
-
 	r.Step(pb.Message{MsgType: pb.MessageType_MsgAppend, Term: 2})
-
 	if r.Term != 2 {
 		t.Errorf("term = %d, want %d", r.Term, 2)
 	}

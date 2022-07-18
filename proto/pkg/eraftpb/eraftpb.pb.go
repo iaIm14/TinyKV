@@ -458,7 +458,7 @@ func (m *Message) GetReject() bool {
 	return false
 }
 
-// HardState contains the state of a node need to be peristed, including the current term, commit index
+// HardState contains the state of a node need to be persisted, including the current term, commit index
 // and the vote record
 type HardState struct {
 	Term                 uint64   `protobuf:"varint,1,opt,name=term,proto3" json:"term,omitempty"`

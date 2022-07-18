@@ -56,36 +56,83 @@ type RaftLog struct {
 // to the state that it just commits and applies the latest snapshot.
 func newLog(storage Storage) *RaftLog {
 	// Your Code Here (2A).
-	return nil
+	ret := &RaftLog{
+		storage: storage,
+	}
+	firstIndex, err := ret.storage.FirstIndex()
+	if err != nil {
+		return nil
+	}
+	lastIndex, err := ret.storage.LastIndex()
+	if err != nil {
+		return nil
+	}
+	entries, err := ret.storage.Entries(firstIndex, lastIndex+1) // note
+	if err != nil {
+		return nil
+	}
+	ret.entries = entries
+	// left note
+	ret.committed = firstIndex - 1
+	ret.applied = firstIndex - 1
+	ret.stabled = lastIndex
+	return ret
 }
 
 // We need to compact the log entries in some point of time like
 // storage compact stabled log entries prevent the log entries
 // grow unlimitedly in memory
 func (l *RaftLog) maybeCompact() {
+
 	// Your Code Here (2C).
 }
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
+
 	return nil
 }
 
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	return nil
+	var ret []pb.Entry
+	for _, v := range l.entries {
+		if v.Index >= l.committed && v.Index < l.applied {
+			ret = append(ret, v)
+		}
+	}
+	return ret
 }
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
-	return 0
+	if len(l.entries) == 0 {
+		return 0
+	}
+	last := len(l.entries) - 1
+	return l.entries[last].Index
+	//ret, err := l.storage.LastIndex()
+	//if err != nil {
+	//	return 0
+	//}
+	//return ret
 }
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-	return 0, nil
+	if dummyEntry, _ := l.storage.FirstIndex(); i < dummyEntry-1 || i > l.LastIndex() {
+		return 0, nil
+	}
+	//if firstIndex, _ := l.storage.FirstIndex(); len(l.entries) != 0 && i >= firstIndex {
+	//	return l.Term(i-firstIndex)
+	//}
+	ret, err := l.storage.Term(i)
+	if err != nil {
+		return 0, err
+	}
+	return ret, nil
 }
