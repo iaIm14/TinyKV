@@ -177,11 +177,22 @@ func newRaft(c *Config) *Raft {
 		heartbeatTimeout: c.HeartbeatTick, // + rand.Intn(10),
 		electionTimeout:  c.ElectionTick,  // + rand.Intn(10), // debug Tick & Timeout rand
 	}
-	for _, v := range c.peers {
-		r.Prs[v] = &Progress{
-			Match: 0,
-			Next:  1,
-			// debug initial
+	r.becomeFollower(0, 0)
+	lastIndex := r.RaftLog.LastIndex()
+	for i, _ := range c.peers {
+		if uint64(i) == r.id {
+			r.Prs[uint64(i)] = &Progress{Match: lastIndex, Next: lastIndex + 1}
+		} else {
+			r.Prs[uint64(i)] = &Progress{Match: 0, Next: lastIndex + 1}
+		}
+	}
+	state, confState, _ := r.RaftLog.storage.InitialState()
+	r.Term, r.Vote, r.RaftLog.committed = state.Term, state.Vote, state.Commit
+	for i := range confState.Nodes {
+		if uint64(i) == r.id {
+			r.Prs[uint64(i)] = &Progress{Match: lastIndex, Next: lastIndex + 1}
+		} else {
+			r.Prs[uint64(i)] = &Progress{Match: 0, Next: lastIndex + 1}
 		}
 	}
 	return r
@@ -194,23 +205,10 @@ func (r *Raft) sendAppend(to uint64) bool {
 	if r.State != StateLeader {
 		return false
 	}
+	//lastIndex := r.RaftLog.LastIndex()
+
 	var entries []*pb.Entry
 	prevLogIndex := r.Prs[to].Next - 1
-	var prevLogTerm uint64 // note
-	for _, v := range r.RaftLog.entries {
-		if v.Index == prevLogIndex {
-			prevLogTerm = v.Term
-			break
-		}
-	}
-	// note initialState RaftLog.Entries[] empty
-	for _, v := range r.RaftLog.entries {
-		index := v.Index
-		if index > prevLogIndex {
-			entries = append(entries, &v)
-			r.Prs[to].Next = index + 1
-		}
-	}
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgAppend,
 		From:    r.Lead,
@@ -219,22 +217,36 @@ func (r *Raft) sendAppend(to uint64) bool {
 		Entries: entries,
 		Commit:  r.RaftLog.committed,
 		Index:   prevLogIndex,
-		LogTerm: prevLogTerm,
 	}
+	lastIndex := r.RaftLog.LastIndex()
+	if lastIndex == r.Prs[to].Next+1 {
+		msg.Index = prevLogIndex
+		if entries := r.RaftLog.getEntries(r.RaftLog.LastIndex(), r.RaftLog.LastIndex()+1); len(entries) != 0 {
+			msg.LogTerm = r.RaftLog.getEntries(r.RaftLog.LastIndex(), r.RaftLog.LastIndex()+1)[0].Term
+		}
+	} else if lastIndex >= r.Prs[to].Next {
+		entries := r.RaftLog.getEntries(r.Prs[to].Next, r.RaftLog.LastIndex())
+		msg.Index = r.Prs[to].Next - 1
+		msg.LogTerm, _ = r.RaftLog.Term(msg.Index)
+		for _, v := range entries {
+			msg.Entries = append(msg.Entries, &v)
+		}
+	}
+	// note initialState RaftLog.Entries[] empty
 	r.msgs = append(r.msgs, msg)
 	return true
 }
 
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
-	//commit := min(r.Prs[to].Match, r.RaftLog.committed)
+	commit := min(r.Prs[to].Match, r.RaftLog.committed)
 	//debug why send commit
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeat,
-		From:    r.id, // debug or r.Lead
-		//Commit:  commit, // note not send
-		To:   to,
-		Term: r.Term,
+		From:    r.id,   // debug or r.Lead
+		Commit:  commit, // note not send
+		To:      to,
+		Term:    r.Term,
 	}
 	r.msgs = append(r.msgs, msg)
 	// Your Code Here (2A).

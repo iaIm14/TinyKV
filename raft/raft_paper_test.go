@@ -363,7 +363,7 @@ func TestLeaderStartReplication2AB(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, s)
 	r.becomeCandidate()
 	r.becomeLeader()
-	commitNoopEntry(r, s)
+	commitNoopEntry(r, s, t)
 	li := r.RaftLog.LastIndex()
 
 	ents := []*pb.Entry{{Data: []byte("some data")}}
@@ -403,7 +403,7 @@ func TestLeaderCommitEntry2AB(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, s)
 	r.becomeCandidate()
 	r.becomeLeader()
-	commitNoopEntry(r, s)
+	commitNoopEntry(r, s, t)
 	li := r.RaftLog.LastIndex()
 	r.Step(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 
@@ -457,7 +457,7 @@ func TestLeaderAcknowledgeCommit2AB(t *testing.T) {
 		r := newTestRaft(1, idsBySize(tt.size), 10, 1, s)
 		r.becomeCandidate()
 		r.becomeLeader()
-		commitNoopEntry(r, s)
+		commitNoopEntry(r, s, t)
 		li := r.RaftLog.LastIndex()
 		r.Step(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 
@@ -885,7 +885,7 @@ func (s messageSlice) Len() int           { return len(s) }
 func (s messageSlice) Less(i, j int) bool { return fmt.Sprint(s[i]) < fmt.Sprint(s[j]) }
 func (s messageSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func commitNoopEntry(r *Raft, s *MemoryStorage) {
+func commitNoopEntry(r *Raft, s *MemoryStorage, t *testing.T) {
 	if r.State != StateLeader {
 		panic("it should only be used when it is the leader")
 	}
@@ -893,13 +893,13 @@ func commitNoopEntry(r *Raft, s *MemoryStorage) {
 		if id == r.id {
 			continue
 		}
-
 		r.sendAppend(id)
 	}
 	// simulate the response of MessageType_MsgAppend
 	msgs := r.readMessages()
 	for _, m := range msgs {
 		if m.MsgType != pb.MessageType_MsgAppend || len(m.Entries) != 1 || m.Entries[0].Data != nil {
+			t.Logf("%v %v ", len(m.Entries), m.Entries[0].Data)
 			panic("not a message to append noop entry")
 		}
 		r.Step(acceptAndReply(m))

@@ -92,51 +92,61 @@ func (l *RaftLog) maybeCompact() {
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
-
-	return nil
+	if l.stabled >= l.LastIndex() {
+		return nil
+	}
+	return l.getEntries(l.stabled+1, l.LastIndex()+1)
 }
 
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	var ret []pb.Entry
-	for _, v := range l.entries {
-		if v.Index >= l.committed && v.Index < l.applied {
-			ret = append(ret, v)
-		}
+	if l.applied > l.LastIndex() {
+		return nil
 	}
-	return ret
+	return l.getEntries(l.applied+1, l.LastIndex()+1)
+}
+
+// getEntries return all Entry Index between [lo,ro)
+func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
+	lastIndex := l.LastIndex()
+	// note ro > lastIndex +1
+	if lo > lastIndex || ro > lastIndex+1 || lo == ro {
+		return []pb.Entry{}
+	}
+	if len(l.entries) > 0 {
+		var ents []pb.Entry
+		if lo < l.offset {
+			entries, err := l.storage.Entries(lo, min(l.offset, ro))
+			if err != nil {
+				return []pb.Entry{}
+			}
+			ents = entries
+		}
+		if ro > l.offset {
+			ents = append(ents, l.entries[max(lo, l.offset)-l.offset:ro-l.offset]...)
+		}
+		return ents
+	} else {
+		ents, _ := l.storage.Entries(lo, ro)
+		return ents
+	}
 }
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
 	if len(l.entries) == 0 {
-		return 0
+		ret, _ := l.storage.LastIndex()
+		return ret
+	} else {
+		return uint64(len(l.entries)) + l.offset - 1
 	}
-	last := len(l.entries) - 1
-	return l.entries[last].Index
-	//ret, err := l.storage.LastIndex()
-	//if err != nil {
-	//	return 0
-	//}
-	//return ret
 }
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-	//if dummyEntry, _ := l.storage.FirstIndex(); i < dummyEntry-1 || i > l.LastIndex() {
-	//	return 0, nil
-	//}
-	////if firstIndex, _ := l.storage.FirstIndex(); len(l.entries) != 0 && i >= firstIndex {
-	////	return l.Term(i-firstIndex)
-	////}
-	//ret, err := l.storage.Term(i)
-	//if err != nil {
-	//	return 0, err
-	//}
-	//return ret, nil
 	if i > l.LastIndex() {
 		return 0, nil
 	}
