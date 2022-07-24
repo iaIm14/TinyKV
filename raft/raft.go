@@ -16,11 +16,12 @@ package raft
 
 import (
 	"errors"
-	"github.com/gogo/protobuf/sortkeys"
-	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 	"log"
 	"math/rand"
 	"os"
+
+	"github.com/gogo/protobuf/sortkeys"
+	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
 // None is a placeholder node ID used when there is no leader.
