@@ -14,7 +14,10 @@
 
 package raft
 
-import pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+import (
+	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+	"log"
+)
 
 // RaftLog manage the log entries, its struct look like:
 //
@@ -50,6 +53,7 @@ type RaftLog struct {
 	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
+	// first entry in Raftlog.entries 's Index
 	offset uint64
 }
 
@@ -93,7 +97,7 @@ func (l *RaftLog) maybeCompact() {
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
 	if l.stabled >= l.LastIndex() {
-		return nil
+		return []pb.Entry{}
 	}
 	return l.getEntries(l.stabled+1, l.LastIndex()+1)
 }
@@ -101,10 +105,10 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	if l.applied > l.LastIndex() {
-		return nil
+	if l.applied >= l.LastIndex() {
+		return []pb.Entry{}
 	}
-	return l.getEntries(l.applied+1, l.LastIndex()+1)
+	return l.getEntries(l.applied+1, l.committed+1)
 }
 
 // getEntries return all Entry Index between [lo,ro)
@@ -119,13 +123,16 @@ func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 		if lo < l.offset {
 			entries, err := l.storage.Entries(lo, min(l.offset, ro))
 			if err != nil {
-				return []pb.Entry{}
+				return nil
 			}
 			ents = entries
+			log.Printf("[DEBUG] DEBUG getEntries lo<offset:%v", ents)
 		}
 		if ro > l.offset {
 			ents = append(ents, l.entries[max(lo, l.offset)-l.offset:ro-l.offset]...)
+			log.Printf("[DEBUG] DEBUG getEntries ro>offset:%v", ents)
 		}
+		log.Printf("[DEBUG] DEBUG getEntries: offset==%v lastIndex==%v", l.offset, l.LastIndex())
 		return ents
 	} else {
 		ents, _ := l.storage.Entries(lo, ro)
@@ -154,4 +161,38 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 		return l.entries[i-l.offset].Term, nil
 	}
 	return l.storage.Term(i)
+}
+
+// LastTerm return last term
+func (l *RaftLog) LastTerm() (uint64, error) {
+	lastIndex := l.LastIndex()
+	return l.Term(lastIndex)
+}
+
+// BaseAppendEntries Follower append entries, maybe conflict
+// base on etcd: func (*unstable) truncateAndAppend()
+func (l *RaftLog) BaseAppendEntries(entries ...*pb.Entry) {
+	if len(entries) == 0 {
+		return
+	}
+	prevIndex := entries[0].Index - 1
+	switch {
+	case prevIndex == l.offset+uint64(len(l.entries))-1:
+		for _, v := range entries {
+			l.entries = append(l.entries, *v)
+		}
+	case prevIndex < l.offset:
+		l.stabled = min(l.stabled, prevIndex)
+		l.offset = prevIndex + 1
+		l.entries = []pb.Entry{}
+		for _, v := range entries {
+			l.entries = append(l.entries, *v)
+		}
+	default:
+		l.stabled = min(prevIndex, l.stabled)
+		l.entries = append([]pb.Entry{}, l.getEntries(l.offset, prevIndex+1)...)
+		for _, v := range entries {
+			l.entries = append(l.entries, *v)
+		}
+	}
 }

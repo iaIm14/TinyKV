@@ -1606,9 +1606,19 @@ func (nw *network) send(msgs ...pb.Message) {
 		p := nw.peers[m.To]
 		p.Step(m)
 		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
+
 	}
 }
-
+func (nw *network) send_debug(t *testing.T, msgs ...pb.Message) {
+	for len(msgs) > 0 {
+		m := msgs[0]
+		p := nw.peers[m.To]
+		t.Logf("[DEBUG] %v %v", p, m)
+		p.Step(m)
+		t.Log("[DEBUG] FINISH handle STEP")
+		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
+	}
+}
 func (nw *network) drop(from, to uint64, perc float64) {
 	nw.dropm[connem{from, to}] = perc
 }

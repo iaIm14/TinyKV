@@ -27,6 +27,8 @@ package raft
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -88,14 +90,21 @@ func TestLeaderBcastBeat2AA(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, hi, NewMemoryStorage())
 	r.becomeCandidate()
 	r.becomeLeader()
-
+	for i, v := range r.Prs {
+		t.Logf("%v %v %v endl", i, v.Next, v.Match)
+	}
 	r.Step(pb.Message{MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
+	for _, v := range r.msgs {
+		t.Logf("%v end", v)
+	}
 	r.readMessages() // clear message
 
 	for i := 0; i < hi; i++ {
 		r.tick()
 	}
-
+	for _, v := range r.msgs {
+		t.Logf("%v end", v)
+	}
 	msgs := r.readMessages()
 	sort.Sort(messageSlice(msgs))
 	wmsgs := []pb.Message{
@@ -363,6 +372,7 @@ func TestLeaderStartReplication2AB(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, s)
 	r.becomeCandidate()
 	r.becomeLeader()
+
 	commitNoopEntry(r, s, t)
 	li := r.RaftLog.LastIndex()
 
@@ -408,6 +418,7 @@ func TestLeaderCommitEntry2AB(t *testing.T) {
 	r.Step(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 
 	for _, m := range r.readMessages() {
+		log.Printf("				---[DEBUG] %v", m)
 		r.Step(acceptAndReply(m))
 	}
 
@@ -650,8 +661,8 @@ func TestFollowerAppendEntries2AB(t *testing.T) {
 		storage.Append([]pb.Entry{{Term: 1, Index: 1}, {Term: 2, Index: 2}})
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, storage)
 		r.becomeFollower(2, 2)
-
-		r.Step(pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgAppend, Term: tt.lterm, LogTerm: tt.term, Index: tt.index, Entries: tt.ents})
+		msg := pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgAppend, Term: tt.lterm, LogTerm: tt.term, Index: tt.index, Entries: tt.ents}
+		r.Step(msg)
 
 		wents := make([]pb.Entry, 0, len(tt.wents))
 		for _, ent := range tt.wents {
@@ -739,13 +750,14 @@ func TestLeaderSyncFollowerLog2AB(t *testing.T) {
 		// The second may have more up-to-date log than the first one, so the
 		// first node needs the vote from the third node to become the leader.
 		n := newNetwork(lead, follower, nopStepper)
-		n.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
+		n.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
 		// The election occurs in the term after the one we loaded with
 		// lead's term and committed index setted up above.
+		t.Log("msg_hup finish.")
 		n.send(pb.Message{From: 3, To: 1, MsgType: pb.MessageType_MsgRequestVoteResponse, Term: term + 1})
-
+		t.Log("vote_response finish.")
 		n.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
-
+		t.Log("msg_propose finish.")
 		if g := diffu(ltoa(lead.RaftLog), ltoa(follower.RaftLog)); g != "" {
 			t.Errorf("#%d: log diff:\n%s", i, g)
 		}
@@ -886,6 +898,7 @@ func (s messageSlice) Less(i, j int) bool { return fmt.Sprint(s[i]) < fmt.Sprint
 func (s messageSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func commitNoopEntry(r *Raft, s *MemoryStorage, t *testing.T) {
+	log.New(os.Stderr, "[DEBUG]", 0777)
 	if r.State != StateLeader {
 		panic("it should only be used when it is the leader")
 	}
@@ -898,11 +911,14 @@ func commitNoopEntry(r *Raft, s *MemoryStorage, t *testing.T) {
 	// simulate the response of MessageType_MsgAppend
 	msgs := r.readMessages()
 	for _, m := range msgs {
+		log.Printf("%v end", m)
 		if m.MsgType != pb.MessageType_MsgAppend || len(m.Entries) != 1 || m.Entries[0].Data != nil {
 			t.Logf("%v %v ", len(m.Entries), m.Entries[0].Data)
 			panic("not a message to append noop entry")
 		}
-		r.Step(acceptAndReply(m))
+		msg := acceptAndReply(m)
+		log.Printf("%v endl", msg)
+		r.Step(msg)
 	}
 	// ignore further messages to refresh followers' commit index
 	r.readMessages()
