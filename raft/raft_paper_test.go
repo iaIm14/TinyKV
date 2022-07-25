@@ -601,11 +601,11 @@ func TestFollowerCheckMessageType_MsgAppend2AB(t *testing.T) {
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, storage)
 		r.RaftLog.committed = 1
 		r.becomeFollower(2, 2)
-		msgs := r.readMessages() // clear message
+		_ = r.readMessages() // clear message
 
 		r.Step(pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgAppend, Term: 2, LogTerm: tt.term, Index: tt.index})
 
-		msgs = r.readMessages()
+		msgs := r.readMessages()
 		if len(msgs) != 1 {
 			t.Errorf("#%d: len(msgs) = %+v, want %+v", i, len(msgs), 1)
 		}

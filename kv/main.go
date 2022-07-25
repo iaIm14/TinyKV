@@ -55,7 +55,7 @@ func main() {
 	} else {
 		storage = standalone_storage.NewStandAloneStorage(conf)
 	}
-	// 启动当前节点
+
 	if err := storage.Start(); err != nil {
 		log.Fatal(err)
 	}

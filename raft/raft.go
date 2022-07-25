@@ -182,8 +182,8 @@ func newRaft(c *Config) *Raft {
 	}
 	r.becomeFollower(0, 0)
 	lastIndex := r.RaftLog.LastIndex()
-	state, confState, _ := r.RaftLog.storage.InitialState()
-	r.Term, r.Vote, r.RaftLog.committed = state.Term, state.Vote, state.Commit
+	hardState, confState, _ := r.RaftLog.storage.InitialState()
+	r.Term, r.Vote, r.RaftLog.committed = hardState.Term, hardState.Vote, hardState.Commit
 	if len(c.peers) != 0 {
 		for _, i := range c.peers {
 			if uint64(i) == r.id {
@@ -234,7 +234,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 		//}
 	} else if lastIndex > prevLogIndex {
 		appEntries := r.RaftLog.getEntries(r.Prs[to].Next, r.RaftLog.LastIndex()+1) //note +1: cannot pass TestLeaderycle2AA
-		for i, _ := range appEntries {
+		for i := range appEntries {
 			msg.Entries = append(msg.Entries, &appEntries[i])
 		}
 	}
@@ -414,7 +414,7 @@ func (r *Raft) BcastAppend() {
 		r.RaftLog.committed = max(r.RaftLog.committed, lastIndex)
 		return
 	}
-	for i, _ := range r.Prs {
+	for i := range r.Prs {
 		if i == r.id {
 			continue
 		}
@@ -527,7 +527,7 @@ func (r *Raft) StepCandidate(m pb.Message) error {
 			} else {
 				logTerm = r.RaftLog.entries[len(r.RaftLog.entries)-1].Term
 			}
-			for i, _ := range r.Prs {
+			for i := range r.Prs {
 				if i == r.id {
 					continue
 				}
@@ -613,7 +613,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	case pb.MessageType_MsgTransferLeader:
 	case pb.MessageType_MsgHeartbeat:
 	case pb.MessageType_MsgAppendResponse:
-		if m.Reject == true {
+		if m.Reject {
 			log.Infof("[DEBUG] m.Index & r.prs[from].Next: %v %v", m.Index, r.Prs[m.From].Next)
 			if m.Index == r.Prs[m.From].Next-1 {
 				// if: ignore communication delay messages
@@ -627,7 +627,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 				r.Prs[m.From].Next = m.Index + 1
 				r.Prs[m.From].Match = m.Index
 				if r.UpdateCommit() {
-					for i, _ := range r.Prs {
+					for i := range r.Prs {
 						if uint64(i) == r.id {
 							continue
 						} else {
