@@ -27,11 +27,11 @@ package raft
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/pingcap-incubator/tinykv/log"
 
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
@@ -418,7 +418,7 @@ func TestLeaderCommitEntry2AB(t *testing.T) {
 	r.Step(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 
 	for _, m := range r.readMessages() {
-		log.Printf("				---[DEBUG] %v", m)
+		log.Infof("				---[DEBUG] %v", m)
 		r.Step(acceptAndReply(m))
 	}
 
@@ -886,6 +886,7 @@ func TestLeaderOnlyCommitsLogFromCurrentTerm2AB(t *testing.T) {
 
 		r.Step(pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgAppendResponse, Term: r.Term, Index: tt.index})
 		if r.RaftLog.committed != tt.wcommit {
+			log.Infof("#%d: commit = %d, want %d", i, r.RaftLog.committed, tt.wcommit)
 			t.Errorf("#%d: commit = %d, want %d", i, r.RaftLog.committed, tt.wcommit)
 		}
 	}
@@ -898,7 +899,6 @@ func (s messageSlice) Less(i, j int) bool { return fmt.Sprint(s[i]) < fmt.Sprint
 func (s messageSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func commitNoopEntry(r *Raft, s *MemoryStorage, t *testing.T) {
-	log.New(os.Stderr, "[DEBUG]", 0777)
 	if r.State != StateLeader {
 		panic("it should only be used when it is the leader")
 	}
@@ -911,13 +911,13 @@ func commitNoopEntry(r *Raft, s *MemoryStorage, t *testing.T) {
 	// simulate the response of MessageType_MsgAppend
 	msgs := r.readMessages()
 	for _, m := range msgs {
-		log.Printf("%v end", m)
+		log.Infof("%v end", m)
 		if m.MsgType != pb.MessageType_MsgAppend || len(m.Entries) != 1 || m.Entries[0].Data != nil {
 			t.Logf("%v %v ", len(m.Entries), m.Entries[0].Data)
 			panic("not a message to append noop entry")
 		}
 		msg := acceptAndReply(m)
-		log.Printf("%v endl", msg)
+		log.Infof("%v endl", msg)
 		r.Step(msg)
 	}
 	// ignore further messages to refresh followers' commit index

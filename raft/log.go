@@ -15,7 +15,7 @@
 package raft
 
 import (
-	"log"
+	"github.com/pingcap-incubator/tinykv/log"
 
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
@@ -127,13 +127,13 @@ func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 				return nil
 			}
 			ents = entries
-			log.Printf("[DEBUG] DEBUG getEntries lo<offset:%v", ents)
+			log.Infof("[DEBUG] DEBUG getEntries lo<offset:%v", ents)
 		}
 		if ro > l.offset {
 			ents = append(ents, l.entries[max(lo, l.offset)-l.offset:ro-l.offset]...)
-			log.Printf("[DEBUG] DEBUG getEntries ro>offset:%v", ents)
+			log.Infof("[DEBUG] DEBUG getEntries ro>offset:%v", ents)
 		}
-		log.Printf("[DEBUG] DEBUG getEntries: offset==%v lastIndex==%v", l.offset, l.LastIndex())
+		log.Infof("[DEBUG] DEBUG getEntries: offset==%v lastIndex==%v", l.offset, l.LastIndex())
 		return ents
 	} else {
 		ents, _ := l.storage.Entries(lo, ro)

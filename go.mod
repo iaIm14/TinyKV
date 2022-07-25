@@ -28,6 +28,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/zap v1.14.0
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
 	golang.org/x/tools v0.1.11 // indirect
 	google.golang.org/grpc v1.25.1

@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -163,7 +164,7 @@ func TestLeaderElectionOverwriteNewerLogs2AB(t *testing.T) {
 	}
 
 	// Node 1 campaigns again with a higher term. This time it succeeds.
-	n.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
+	n.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
 	if sm1.State != StateLeader {
 		t.Errorf("state = %s, want StateLeader", sm1.State)
 	}
@@ -371,7 +372,7 @@ func TestCommitWithHeartbeat2AB(t *testing.T) {
 	tt.recover()
 
 	// leader broadcast heartbeat
-	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
+	tt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
 
 	if sm.RaftLog.committed != 3 {
 		t.Errorf("committed = %d, want %d", sm.RaftLog.committed, 3)
@@ -497,7 +498,7 @@ func TestOldMessages2AB(t *testing.T) {
 	tt.send(pb.Message{From: 2, To: 2, MsgType: pb.MessageType_MsgHup})
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
 	// pretend we're an old leader trying to make progress; this entry is expected to be ignored.
-	tt.send(pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgAppend, Term: 2, Entries: []*pb.Entry{{Index: 3, Term: 2}}})
+	tt.send_debug(t, pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgAppend, Term: 2, Entries: []*pb.Entry{{Index: 3, Term: 2}}})
 	// commit a new entry
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("somedata")}}})
 
@@ -600,6 +601,8 @@ func TestHandleMessageType_MsgAppend2AB(t *testing.T) {
 		sm.handleAppendEntries(tt.m)
 		if sm.RaftLog.LastIndex() != tt.wIndex {
 			t.Errorf("#%d: lastIndex = %d, want %d", i, sm.RaftLog.LastIndex(), tt.wIndex)
+			log.Infof("[DEBUG] error")
+			log.Infof("#%d: lastIndex = %d, want %d", i, sm.RaftLog.LastIndex(), tt.wIndex)
 		}
 		if sm.RaftLog.committed != tt.wCommit {
 			t.Errorf("#%d: committed = %d, want %d", i, sm.RaftLog.committed, tt.wCommit)
@@ -1606,16 +1609,14 @@ func (nw *network) send(msgs ...pb.Message) {
 		p := nw.peers[m.To]
 		p.Step(m)
 		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
-
 	}
 }
 func (nw *network) send_debug(t *testing.T, msgs ...pb.Message) {
 	for len(msgs) > 0 {
 		m := msgs[0]
 		p := nw.peers[m.To]
-		t.Logf("[DEBUG] %v %v", p, m)
+		log.Infof("[DEBUG] network msg:%v ,Node:%v", m, p)
 		p.Step(m)
-		t.Log("[DEBUG] FINISH handle STEP")
 		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
 	}
 }
