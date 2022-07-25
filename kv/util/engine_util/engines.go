@@ -16,7 +16,6 @@ import (
 type Engines struct {
 	// Data, including data which is committed (i.e., committed across other nodes) and un-committed (i.e., only present
 	// locally).
-	// badger 实现的LSM-Tree数据库，使用key-value分离的方式，在key大小远小于value的时候性能更好
 	Kv     *badger.DB
 	KvPath string
 	// Metadata used by Raft.
@@ -24,7 +23,7 @@ type Engines struct {
 	RaftPath string
 }
 
-// NewEngines 新建 Engines
+// NewEngines
 func NewEngines(kvEngine, raftEngine *badger.DB, kvPath, raftPath string) *Engines {
 	return &Engines{
 		Kv:       kvEngine,

@@ -78,14 +78,10 @@ func getLogLevel() (logLevel string) {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		// 调度地址
-		SchedulerAddr: "127.0.0.1:2379",
-		// 存储地址
-		StoreAddr: "127.0.0.1:20160",
-
-		LogLevel: getLogLevel(),
-		Raft:     true,
-		// debug project1
+		SchedulerAddr:            "127.0.0.1:2379",
+		StoreAddr:                "127.0.0.1:20160",
+		LogLevel:                 getLogLevel(),
+		Raft:                     true,
 		RaftBaseTickInterval:     1 * time.Second,
 		RaftHeartbeatTicks:       2,
 		RaftElectionTimeoutTicks: 10,
@@ -97,8 +93,7 @@ func NewDefaultConfig() *Config {
 		SchedulerStoreHeartbeatTickInterval: 10 * time.Second,
 		RegionMaxSize:                       144 * MB,
 		RegionSplitSize:                     96 * MB,
-		// 本地存储磁盘文件位置
-		DBPath: "/tmp/badger",
+		DBPath:                              "/tmp/badger",
 	}
 }
 
