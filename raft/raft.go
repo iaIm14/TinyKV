@@ -356,7 +356,7 @@ func (r *Raft) becomeLeader() {
 
 	//---------------
 	lastIndex := r.RaftLog.LastIndex()
-	for i, _ := range r.Prs {
+	for i := range r.Prs {
 		if uint64(i) == r.id {
 			r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1}
 		} else {
@@ -367,11 +367,15 @@ func (r *Raft) becomeLeader() {
 	//---append noop entry to Leader's RaftLog
 	noopEntry := &pb.Entry{EntryType: pb.EntryType_EntryNormal, Data: nil}
 	r.AppendEntries([]*pb.Entry{noopEntry}...)
-	for i, _ := range r.Prs {
+	for i := range r.Prs {
 		if uint64(i) == r.id {
 			continue
 		}
 		r.sendAppend(i)
+	}
+	// 2AC
+	if len(r.Prs) == 1 {
+		r.UpdateCommit()
 	}
 	log.Infof("[DEBUG] in BecomeLeader lastIndex:%v", lastIndex)
 	for _, v := range r.RaftLog.entries {
@@ -784,4 +788,19 @@ func (r *Raft) addNode(id uint64) {
 // removeNode remove a node from raft group
 func (r *Raft) removeNode(id uint64) {
 	// Your Code Here (3A).
+}
+
+// add for 2AC
+func (r *Raft) SoftState() *SoftState {
+	return &SoftState{
+		Lead:      r.Lead,
+		RaftState: r.State,
+	}
+}
+func (r *Raft) HardState() pb.HardState {
+	return pb.HardState{
+		Term:   r.Term,
+		Vote:   r.Vote,
+		Commit: r.RaftLog.committed,
+	}
 }

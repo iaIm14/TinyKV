@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -172,12 +173,17 @@ func TestRawNodeStart2AC(t *testing.T) {
 	rd = rawNode.Ready()
 	if el := len(rd.Entries); el != len(rd.CommittedEntries) || el != 1 {
 		t.Errorf("got len(Entries): %+v, len(CommittedEntries): %+v, want %+v", el, len(rd.CommittedEntries), 1)
+		log.Infof("CommittedEntries :%v , Entries:%v", rd.CommittedEntries, rd.Entries)
 	}
 	if !reflect.DeepEqual(rd.Entries[0].Data, rd.CommittedEntries[0].Data) || !reflect.DeepEqual(rd.Entries[0].Data, []byte("foo")) {
 		t.Errorf("got %+v %+v , want %+v", rd.Entries[0].Data, rd.CommittedEntries[0].Data, []byte("foo"))
 	}
 	storage.Append(rd.Entries)
+	t.Logf("[DEBUG]rawNode.SoftState&Hardstate :%v %v", *rawNode.preSoftState, rawNode.preHardState)
+	t.Logf("[DEBUG]NewNode.SoftState&Hardstate :%v %v", *rawNode.Raft.SoftState(), rawNode.Raft.HardState())
 	rawNode.Advance(rd)
+	t.Logf("[DEBUG]rawNode.SoftState&Hardstate :%v %v", *rawNode.preSoftState, rawNode.preHardState)
+	t.Logf("[DEBUG]NewNode.SoftState&Hardstate :%v %v", *rawNode.Raft.SoftState(), rawNode.Raft.HardState())
 
 	if rawNode.HasReady() {
 		t.Errorf("unexpected Ready: %+v", rawNode.Ready())
