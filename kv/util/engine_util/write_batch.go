@@ -15,17 +15,15 @@ type WriteBatch struct {
 	//	Usermeta byte
 	//	ExpireAt uint64 // 过期时间
 	//}
-	// entries 存储需要写操作的所有对象的位置
-	entries []*badger.Entry
+	// entries 存储需要写操作的所有对象
 	// size entries数量
-	size int
-
+	entries       []*badger.Entry
+	size          int
 	safePoint     int
 	safePointSize int
 	safePointUndo int
 }
 
-// debug ?? unknown
 const (
 	CfDefault string = "default"
 	CfWrite   string = "write"
@@ -39,7 +37,7 @@ func (wb *WriteBatch) Len() int {
 	return len(wb.entries)
 }
 
-// SetCF 将带有CF的一对键值对注册到WriteBatch的Entry数组里
+//SetCF
 func (wb *WriteBatch) SetCF(cf string, key, val []byte) {
 	wb.entries = append(wb.entries, &badger.Entry{
 		Key:   KeyWithCF(cf, key),
@@ -55,7 +53,7 @@ func (wb *WriteBatch) DeleteMeta(key []byte) {
 	wb.size += len(key)
 }
 
-// DeleteCF 将带有CF的key注册一个删除操作 value不用设置默认为删除操作
+// DeleteCF
 func (wb *WriteBatch) DeleteCF(cf string, key []byte) {
 	wb.entries = append(wb.entries, &badger.Entry{
 		Key: KeyWithCF(cf, key),

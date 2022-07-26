@@ -89,7 +89,6 @@ func (c *Config) validate() error {
 	if c.ID == None {
 		return errors.New("cannot use none as id")
 	}
-
 	if c.HeartbeatTick <= 0 {
 		return errors.New("heartbeat tick must be greater than 0")
 	}
