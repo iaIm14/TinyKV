@@ -98,10 +98,11 @@ func (c *Cluster) Start() {
 		EndKey:      []byte{},
 		RegionEpoch: regionEpoch,
 	}
-
+	// log.Info("[DEBUG] begin iter c.engines")
 	for storeID, engine := range c.engines {
 		peer := NewPeer(storeID, storeID)
 		firstRegion.Peers = append(firstRegion.Peers, peer)
+		// log.Infof("[DEBUG] raftstore.BootstrapStore(engine: %v, clusterID: %v, storeID: %v)", engine, clusterID, storeID)
 		err := raftstore.BootstrapStore(engine, clusterID, storeID)
 		if err != nil {
 			panic(err)
@@ -135,7 +136,7 @@ func (c *Cluster) Start() {
 		}
 		raftstore.ClearPrepareBootstrapState(engine)
 	}
-
+	// log.Info("[DEBUG] StartServer begin. ")
 	for storeID := range c.engines {
 		c.StartServer(storeID)
 	}

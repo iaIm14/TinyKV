@@ -16,7 +16,6 @@ package raft
 
 import (
 	"github.com/pingcap-incubator/tinykv/log"
-
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -54,7 +53,7 @@ type RaftLog struct {
 	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
-	// first entry in Raftlog.entries 's Index
+	// first entry in Raftlog.entries 's Index ==FirstIndex
 	offset uint64
 }
 
@@ -79,7 +78,7 @@ func newLog(storage Storage) *RaftLog {
 	}
 	ret.entries = entries
 	// left note
-	ret.committed = firstIndex - 1
+	// ret.committed = firstIndex - 1
 	ret.applied = firstIndex - 1
 	ret.stabled = lastIndex
 	ret.offset = firstIndex
@@ -98,6 +97,7 @@ func (l *RaftLog) maybeCompact() {
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
 	if l.stabled >= l.LastIndex() {
+		log.Info("[ERROR] l.stabled >=l.lastIndex")
 		return []pb.Entry{}
 	}
 	return l.getEntries(l.stabled+1, l.LastIndex()+1)
@@ -107,6 +107,7 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
 	if l.applied >= l.LastIndex() {
+		log.Info("[ERROR] l.applied >=l.lastIndex")
 		return []pb.Entry{}
 	}
 	return l.getEntries(l.applied+1, l.committed+1)
@@ -127,18 +128,15 @@ func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 				return nil
 			}
 			ents = entries
-			log.Infof("[DEBUG] getEntries lo<offset:%v", ents)
+			log.Infof("[ERROR] getEntries partly from storage: %v", ents)
 		}
 		if ro > l.offset {
 			ents = append(ents, l.entries[max(lo, l.offset)-l.offset:ro-l.offset]...)
-			log.Infof("[DEBUG]getEntries ro>offset:%v", ents)
 		}
-		log.Infof("[DEBUG] getEntries: offset==%v lastIndex==%v", l.offset, l.LastIndex())
-		log.Infof("[DEBUG] getEntries ret from Raftlog.Entries :%v", ents)
 		return ents
 	} else {
 		ents, _ := l.storage.Entries(lo, ro)
-		log.Infof("[DEBUG] getEntries ret from storage: %v", ents)
+		log.Infof("[ERROR] getEntries all from storage: %v", ents)
 		return ents
 	}
 }

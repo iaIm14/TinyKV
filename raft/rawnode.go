@@ -93,6 +93,7 @@ func (rn *RawNode) Tick() {
 
 // Campaign causes this RawNode to transition to candidate state.
 func (rn *RawNode) Campaign() error {
+	// log.Infof("[DEBUG]++rawNode Campaign call step ")
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgHup,
 	})
@@ -151,7 +152,7 @@ func (rn *RawNode) Step(m pb.Message) error {
 // Ready returns the current point-in-time state of this RawNode.
 func (rn *RawNode) Ready() Ready {
 	// Your Code Here (2A).
-	ret := &Ready{
+	ret := Ready{
 		Entries:          rn.Raft.RaftLog.unstableEntries(),
 		CommittedEntries: rn.Raft.RaftLog.nextEnts(),
 		Messages:         rn.Raft.msgs,
@@ -159,26 +160,39 @@ func (rn *RawNode) Ready() Ready {
 	newSoftState := rn.Raft.SoftState()
 	if !isSoftStateEqual(*newSoftState, *rn.preSoftState) {
 		ret.SoftState = newSoftState
+		// debuginfo
+		rn.preSoftState = newSoftState
 	}
 	newHardState := rn.Raft.HardState()
 	if !isHardStateEqual(newHardState, rn.preHardState) {
 		ret.HardState = newHardState
 	}
-	if ret.SoftState != nil {
-		rn.preSoftState = ret.SoftState
+	// if ret.SoftState != nil {
+	// 	rn.preSoftState = ret.SoftState
+	// }
+	rn.Raft.msgs = make([]pb.Message, 0)
+	//debuginfo
+	if !IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot) {
+		ret.Snapshot = *rn.Raft.RaftLog.pendingSnapshot
+		rn.Raft.RaftLog.pendingSnapshot = nil
 	}
-	rn.Raft.msgs = nil
-	// debug
-	return *ret
+	return ret
 }
 
 // HasReady called when RawNode user need to check if any Ready pending.
 func (rn *RawNode) HasReady() bool {
 	// Your Code Here (2A).
 	ret := len(rn.Raft.msgs) != 0 || len(rn.Raft.RaftLog.nextEnts()) != 0 || len(rn.Raft.RaftLog.unstableEntries()) != 0 ||
-		!isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) || !isHardStateEqual(rn.preHardState, rn.Raft.HardState())
-	log.Infof("[DEBUG]soft :%v %v", *rn.preSoftState, *rn.Raft.SoftState())
-	log.Infof("[DEBUG]hard :%v %v", rn.preHardState, rn.Raft.HardState())
+		// !isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) ||
+		// debuginfo:preSoftState changes in Ready() function
+		(!isHardStateEqual(rn.preHardState, rn.Raft.HardState()) && !IsEmptyHardState(rn.Raft.HardState()))
+	// if ret {
+	// log.Infof("[DEBUG]soft :%v %v", *rn.preSoftState, *rn.Raft.SoftState())
+	// log.Infof("[DEBUG]hard :%v %v", rn.preHardState, rn.Raft.HardState())
+	// log.Infof("[DEBUG]rn.Raft.Raftlog.nextEnts: %v", rn.Raft.RaftLog.nextEnts())
+	// log.Infof("[DEBUG]rn.Raft.Raftlog.unstableEntries: %v", rn.Raft.RaftLog.unstableEntries())
+	// log.Infof("[DEBUG]rn.Raft.msgs: %v", rn.Raft.msgs)
+	// }
 	return ret
 }
 
@@ -190,15 +204,18 @@ func (rn *RawNode) Advance(rd Ready) {
 		rn.preHardState = rd.HardState
 	}
 	if len(rd.Entries) != 0 {
+		// rn.Raft.RaftLog.stabled = rd.Entries[len(rd.Entries)-1].Index
+
 		lastIndex := rd.Entries[len(rd.Entries)-1].Index
-		rn.Raft.RaftLog.entries = rn.Raft.RaftLog.entries[lastIndex-rn.Raft.RaftLog.offset+1:]
-		rn.Raft.RaftLog.offset = lastIndex + 1
+		// log.Infof("[DEBUG]+++ lastIndex:%v  offset:%v", lastIndex, rn.Raft.RaftLog.offset)
+		// rn.Raft.RaftLog.entries = rn.Raft.RaftLog.entries[lastIndex-rn.Raft.RaftLog.offset+1:]
+		// rn.Raft.RaftLog.offset = lastIndex + 1
 		rn.Raft.RaftLog.stabled = lastIndex
 	}
 	if len(rd.CommittedEntries) != 0 {
 		lastIndex := rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
 		if lastIndex < rn.Raft.RaftLog.applied || lastIndex > rn.Raft.RaftLog.committed {
-			log.Info("[DEBUG] Newly Applied Entries not Allowed")
+			log.Info("[ERROR] Newly Applied Entries not Allowed")
 		}
 		rn.Raft.RaftLog.applied = lastIndex
 	}

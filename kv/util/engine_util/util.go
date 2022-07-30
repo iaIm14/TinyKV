@@ -8,15 +8,13 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-// KeyWithCF Badger实现的LSM-Tree key &value部分是分开的
-// KeyWithCF 给WriteBatch的Write&DeleteCF更新key，构造一个CF_key格式的新key返回
+// KeyWithCF
 func KeyWithCF(cf string, key []byte) []byte {
 	return append([]byte(cf+"_"), key...)
 }
 
-// GetCF 获得CF对应的所有value值的数组
+// GetCF get value from db&cache keywithCF:value
 func GetCF(db *badger.DB, cf string, key []byte) (val []byte, err error) {
-	// db.view 封装db.NewTransaction
 	err = db.View(func(txn *badger.Txn) error {
 		val, err = GetCFFromTxn(txn, cf, key)
 		return err
@@ -24,21 +22,18 @@ func GetCF(db *badger.DB, cf string, key []byte) (val []byte, err error) {
 	return
 }
 
-// GetCFFromTxn badger.Txn 表示对象事务transaction，实现了Get(key []bytes),Delete(keys),
-// Commit()读操作直接返回，写操作如果写入对象在事务Txn启动SetEntry(badger.Entry)之后更新了
+// GetCFFromTxn
 func GetCFFromTxn(txn *badger.Txn, cf string, key []byte) (val []byte, err error) {
 	item, err := txn.Get(KeyWithCF(cf, key))
 	if err != nil {
 		return nil, err
 	}
-	// item返回的对象集合的链表上的节点，ValueCopy将其从存储value的WAL拷贝到val
-	// ，实际上调用了package y中的SafeCopy函数
 	val, err = item.ValueCopy(val)
 	return
 }
 
+// PutCF txn.set
 func PutCF(engine *badger.DB, cf string, key []byte, val []byte) error {
-	//  db.update封装 txn.commit()&txn.discard()
 	return engine.Update(func(txn *badger.Txn) error {
 		return txn.Set(KeyWithCF(cf, key), val)
 	})
