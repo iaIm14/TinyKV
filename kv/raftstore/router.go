@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/message"
+	"github.com/pingcap-incubator/tinykv/log"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
 
@@ -15,6 +16,10 @@ import (
 type peerState struct {
 	closed uint32
 	peer   *peer
+}
+
+func (ps *peerState) show() {
+	log.Infof("[DEBUG]+ peer proposals: %v, regionID: %v", ps.peer.proposals, ps.peer.regionId)
 }
 
 // router routes a message to a peer.
@@ -58,6 +63,7 @@ func (pr *router) close(regionID uint64) {
 }
 
 func (pr *router) send(regionID uint64, msg message.Msg) error {
+	// log.Infof("[DEBUG]+++ router send data %v; regionId %v; Type %v", msg.Data, msg.RegionID, msg.Type)
 	msg.RegionID = regionID
 	p := pr.get(regionID)
 	if p == nil || atomic.LoadUint32(&p.closed) == 1 {
@@ -100,5 +106,6 @@ func (r *RaftstoreRouter) SendRaftCommand(req *raft_cmdpb.RaftCmdRequest, cb *me
 		Callback: cb,
 	}
 	regionID := req.Header.RegionId
-	return r.router.send(regionID, message.NewPeerMsg(message.MsgTypeRaftCmd, regionID, cmd))
+	err := r.router.send(regionID, message.NewPeerMsg(message.MsgTypeRaftCmd, regionID, cmd))
+	return err
 }

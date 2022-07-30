@@ -132,6 +132,11 @@ func confchanger(t *testing.T, cluster *Cluster, ch chan bool, done *int32) {
 	}
 }
 
+func TestBasic2B(t *testing.T) {
+	// Test: one client (2B) ...
+	GenericTest(t, "2B", 1, false, false, false, -1, false, false)
+}
+
 // Basic test is as follows: one or more clients submitting Put/Scan
 // operations to set of servers for some period of time.  After the period is
 // over, test checks that all sequential values are present and in order for a
@@ -166,6 +171,7 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 	}
 	title = title + " (" + part + ")" // 3A or 3B
 
+	// log.Infof("[DEBUG] title:{ %v }", title)
 	nservers := 5
 	cfg := config.NewTestConfig()
 	if maxraftlog != -1 {
@@ -176,13 +182,15 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 		cfg.RegionSplitSize = 200
 	}
 	cluster := NewTestCluster(nservers, cfg)
+	// log.Infof("[DEBUG]cluster created: %v", cluster)
 	cluster.Start()
+	// log.Infof("[DEBUG]cluster started: %v", cluster)
 	defer cluster.Shutdown()
 
 	electionTimeout := cfg.RaftBaseTickInterval * time.Duration(cfg.RaftElectionTimeoutTicks)
 	// Wait for leader election
 	time.Sleep(2 * electionTimeout)
-
+	log.Info("[DEBUG] sleep phase 1 end.")
 	done_partitioner := int32(0)
 	done_confchanger := int32(0)
 	done_clients := int32(0)
@@ -207,7 +215,7 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 				if (rand.Int() % 1000) < 500 {
 					key := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", j)
 					value := "x " + strconv.Itoa(cli) + " " + strconv.Itoa(j) + " y"
-					// log.Infof("%d: client new put %v,%v\n", cli, key, value)
+					log.Infof("%d: client new put %v,%v\n", cli, key, value)
 					cluster.MustPut([]byte(key), []byte(value))
 					last = NextValue(last, value)
 					j++
@@ -327,11 +335,6 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 			}
 		}
 	}
-}
-
-func TestBasic2B(t *testing.T) {
-	// Test: one client (2B) ...
-	GenericTest(t, "2B", 1, false, false, false, -1, false, false)
 }
 
 func TestConcurrent2B(t *testing.T) {

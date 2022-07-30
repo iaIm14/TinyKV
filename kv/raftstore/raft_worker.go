@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/message"
+	"github.com/pingcap-incubator/tinykv/log"
 )
 
 // raftWorker is responsible for run raft commands and apply raft logs.
@@ -25,6 +26,14 @@ func newRaftWorker(ctx *GlobalContext, pm *router) *raftWorker {
 		ctx:    ctx,
 		pr:     pm,
 	}
+}
+
+func (ctx *GlobalContext) ShowGlobalContext() {
+	stoteMeta := ctx.storeMeta
+	storestate := ctx.store.State.String()
+	storeid := ctx.store.Id
+	region := stoteMeta.regions
+	log.Infof("[DEBUG]+ globalcontext: region %v ; storestate %v; storeid %v;", region, storestate, storeid)
 }
 
 // run runs raft commands.
@@ -51,6 +60,7 @@ func (rw *raftWorker) run(closeCh <-chan struct{}, wg *sync.WaitGroup) {
 			if peerState == nil {
 				continue
 			}
+			log.Infof("[DEBUG]+ HandleMsg call: msg data:%v regionId:%v type:%v", msg.Data, msg.RegionID, msg.Type)
 			newPeerMsgHandler(peerState.peer, rw.ctx).HandleMsg(msg)
 		}
 		for _, peerState := range peerStateMap {

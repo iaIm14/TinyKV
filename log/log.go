@@ -267,7 +267,7 @@ func LogTypeToString(t LogType) (string, string) {
 }
 
 func New() *Logger {
-	file, _ := os.OpenFile("../raft/output.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+	file, _ := os.OpenFile("/home/huanggangqi/Desktop/tinykv/output_2.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
 	return NewLogger(file, "")
 }
 
