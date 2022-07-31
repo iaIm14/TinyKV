@@ -311,22 +311,22 @@ func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.Write
 	// // Your Code Here (2B).
 	// lastIndex, err := ps.LastIndex()
 	// if err != nil {
-	// 	return err
+	//      return err
 	// }
 	// if len(entries) == 0 {
-	// 	return nil
+	//      return nil
 	// }
 	// index := entries[0].Index
 	// if index > lastIndex+1 {
-	// 	log.Infof("[DEBUG] write into ps(Raftlog).stable %v but lastIndex too small. want stable.lastIndex+1 == Index", ps)
+	//      log.Infof("[DEBUG] write into ps(Raftlog).stable %v but lastIndex too small. want stable.lastIndex+1 == Index", ps)
 	// }
 	// if index <= lastIndex {
-	// 	for idx := index; idx <= lastIndex; idx++ {
-	// 		raftWB.DeleteMeta(meta.RaftLogKey(ps.region.Id, idx))
-	// 	}
+	//      for idx := index; idx <= lastIndex; idx++ {
+	//              raftWB.DeleteMeta(meta.RaftLogKey(ps.region.Id, idx))
+	//      }
 	// }
 	// for _, v := range entries {
-	// 	raftWB.SetMeta(meta.RaftLogKey(ps.region.Id, v.Index), &v)
+	//      raftWB.SetMeta(meta.RaftLogKey(ps.region.Id, v.Index), &v)
 	// }
 	// return nil
 	if len(entries) == 0 {
@@ -389,23 +389,23 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	// wb := &engine_util.WriteBatch{}
 	// err := ps.Append(ready.Entries, wb)
 	// if err != nil {
-	// 	return nil, err
+	//      return nil, err
 	// }
 	// if !raft.IsEmptyHardState(ready.HardState) {
-	// 	ps.raftState.HardState = &ready.HardState
+	//      ps.raftState.HardState = &ready.HardState
 	// }
 	// // debug
 	// wb.SetMeta(meta.RaftStateKey(ps.region.GetId()), ps.raftState)
 	// // snapshot, err := ps.Snapshot()
 	// // if err != nil {
-	// // 	return nil, err
+	// //   return nil, err
 	// // }
 	// // if ps.validateSnap(&snapshot) {
-	// // 	// snapResult, err := ps.ApplySnapshot(&snapshot, ps.Engines.Kv, ps.Engines.Raft)
+	// //   // snapResult, err := ps.ApplySnapshot(&snapshot, ps.Engines.Kv, ps.Engines.Raft)
 	// // }
 	// err = wb.WriteToDB(ps.Engines.Raft)
 	// if err != nil {
-	// 	return nil, err
+	//      return nil, err
 	// }
 	// return nil, nil
 	raftWB := new(engine_util.WriteBatch)

@@ -657,13 +657,18 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		Term:    r.Term,
 		Index:   m.Index,
 	}
-	if m.Term < r.Term {
+	if m.Term != None && m.Term < r.Term {
 		// old leader send old Term's Entry to Append
+		//debuginfo
+		msg.Reject = true
+		msg.Term = uint64(0)
+		msg.Index = uint64(0)
 		r.msgs = append(r.msgs, msg)
 		return
 	}
 	if r.State == StateFollower {
 		r.electionElapsed = 0
+		r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 		r.Lead = m.From
 	} else if r.State == StateCandidate {
 		r.becomeFollower(m.Term, m.From)
@@ -681,13 +686,13 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	// 		break
 	// 	}
 	// }
-	log.Infof("+++++[DEBUG] r.raftlog.entries info:%v", r.RaftLog.entries)
+	// log.Infof("+++++[DEBUG] r.raftlog.entries info:%v", r.RaftLog.entries)
 	var entries []*pb.Entry
 	conflict := false
 	for _, entry := range m.Entries {
 		t, err := r.RaftLog.Term(entry.Index)
 		if err != nil {
-			log.Info("[DEBUG] Msg.Entries[i].Index search Term error.")
+			// log.Info("[DEBUG] Msg.Entries[i].Index search Term error.")
 			return
 		}
 		if t != entry.Term {
@@ -698,9 +703,9 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		}
 	}
 	//--append to RaftLog-
-	for _, v := range entries {
-		log.Infof("	[DEBUG]handleAppend:%v", v)
-	}
+	// for _, v := range entries {
+	// 	log.Infof("	[DEBUG]handleAppend:%v", v)
+	// }
 	//
 	if len(entries) != 0 {
 		r.RaftLog.BaseAppendEntries(entries...)
