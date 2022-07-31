@@ -5,3 +5,6 @@ unikv/unikv
 bin/*
 _tools
 /vendor
+kv/test_raftstore/tmp/*
+test.sh
+output_2*

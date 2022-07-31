@@ -207,9 +207,9 @@ func (rn *RawNode) Advance(rd Ready) {
 		// rn.Raft.RaftLog.stabled = rd.Entries[len(rd.Entries)-1].Index
 
 		lastIndex := rd.Entries[len(rd.Entries)-1].Index
-		// log.Infof("[DEBUG]+++ lastIndex:%v  offset:%v", lastIndex, rn.Raft.RaftLog.offset)
-		// rn.Raft.RaftLog.entries = rn.Raft.RaftLog.entries[lastIndex-rn.Raft.RaftLog.offset+1:]
-		// rn.Raft.RaftLog.offset = lastIndex + 1
+		// log.Infof("[DEBUG]+++ lastIndex:%v  FirstIndex:%v", lastIndex, rn.Raft.RaftLog.FirstIndex)
+		// rn.Raft.RaftLog.entries = rn.Raft.RaftLog.entries[lastIndex-rn.Raft.RaftLog.FirstIndex+1:]
+		// rn.Raft.RaftLog.FirstIndex = lastIndex + 1
 		rn.Raft.RaftLog.stabled = lastIndex
 	}
 	if len(rd.CommittedEntries) != 0 {

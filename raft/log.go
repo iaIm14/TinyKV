@@ -54,7 +54,7 @@ type RaftLog struct {
 
 	// Your Data Here (2A).
 	// first entry in Raftlog.entries 's Index ==FirstIndex
-	offset uint64
+	FirstIndex uint64
 }
 
 // newLog returns log using the given storage. It recovers the log
@@ -81,7 +81,7 @@ func newLog(storage Storage) *RaftLog {
 	// ret.committed = firstIndex - 1
 	ret.applied = firstIndex - 1
 	ret.stabled = lastIndex
-	ret.offset = firstIndex
+	ret.FirstIndex = firstIndex
 	return ret
 }
 
@@ -122,16 +122,16 @@ func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 	}
 	if len(l.entries) > 0 {
 		var ents []pb.Entry
-		if lo < l.offset {
-			entries, err := l.storage.Entries(lo, min(l.offset, ro))
+		if lo < l.FirstIndex {
+			entries, err := l.storage.Entries(lo, min(l.FirstIndex, ro))
 			if err != nil {
 				return nil
 			}
 			ents = entries
 			log.Infof("[ERROR] getEntries partly from storage: %v", ents)
 		}
-		if ro > l.offset {
-			ents = append(ents, l.entries[max(lo, l.offset)-l.offset:ro-l.offset]...)
+		if ro > l.FirstIndex {
+			ents = append(ents, l.entries[max(lo, l.FirstIndex)-l.FirstIndex:ro-l.FirstIndex]...)
 		}
 		return ents
 	} else {
@@ -148,7 +148,7 @@ func (l *RaftLog) LastIndex() uint64 {
 		ret, _ := l.storage.LastIndex()
 		return ret
 	} else {
-		return uint64(len(l.entries)) + l.offset - 1
+		return uint64(len(l.entries)) + l.FirstIndex - 1
 	}
 }
 
@@ -158,8 +158,8 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 	if i > l.LastIndex() {
 		return 0, nil
 	}
-	if len(l.entries) > 0 && i >= l.offset {
-		return l.entries[i-l.offset].Term, nil
+	if len(l.entries) > 0 && i >= l.FirstIndex {
+		return l.entries[i-l.FirstIndex].Term, nil
 	}
 	return l.storage.Term(i)
 }
@@ -178,20 +178,20 @@ func (l *RaftLog) BaseAppendEntries(entries ...*pb.Entry) {
 	}
 	prevIndex := entries[0].Index - 1
 	switch {
-	case prevIndex == l.offset+uint64(len(l.entries))-1:
+	case prevIndex == l.FirstIndex+uint64(len(l.entries))-1:
 		for _, v := range entries {
 			l.entries = append(l.entries, *v)
 		}
-	case prevIndex < l.offset:
+	case prevIndex < l.FirstIndex:
 		l.stabled = min(l.stabled, prevIndex)
-		l.offset = prevIndex + 1
+		l.FirstIndex = prevIndex + 1
 		l.entries = []pb.Entry{}
 		for _, v := range entries {
 			l.entries = append(l.entries, *v)
 		}
 	default:
 		l.stabled = min(prevIndex, l.stabled)
-		l.entries = append([]pb.Entry{}, l.getEntries(l.offset, prevIndex+1)...)
+		l.entries = append([]pb.Entry{}, l.getEntries(l.FirstIndex, prevIndex+1)...)
 		for _, v := range entries {
 			l.entries = append(l.entries, *v)
 		}
