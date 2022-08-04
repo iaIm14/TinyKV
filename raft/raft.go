@@ -598,6 +598,9 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	}
 }
 func (r *Raft) handleAppendResponse(m pb.Message) {
+	if m.Term < r.Term {
+		return
+	}
 	if m.Reject {
 		log.Infof("[DEBUG] m.Index & r.prs[from].Next: %v %v", m.Index, r.Prs[m.From].Next)
 		// if m.Index == r.Prs[m.From].Next-1 {
@@ -734,7 +737,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 					break
 				}
 			}
-			if retLogIndex == uint64(0) {
+			if retLogIndex == 0 {
 				retLogIndex = m.Index + 1
 			}
 			msg.LogTerm, msg.Index = retLogTerm, retLogIndex
