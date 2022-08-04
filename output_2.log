@@ -1,0 +1,124 @@
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgHup 1 1 0 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 8 0 0xc000136230 map[1:0xc00012c2b0 2:0xc00012c2c0 3:0xc00012c2d0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 2 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{2 7 0 0xc0001362d0 map[1:0xc00012c2e0 2:0xc00012c2f0 3:0xc00012c300] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft.go:665: [info] become Follower because Term diff: m & r.Term: 9 7
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 3 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVoteResponse 1 2 9 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc000136230 map[1:0xc00012c2b0 2:0xc00012c2c0 3:0xc00012c2d0] StateCandidate map[1:true] [] 0 1 10 17 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001362d0 map[1:0xc00012c2e0 2:0xc00012c2f0 3:0xc00012c300] StateFollower map[] [] 0 1 10 11 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 10 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc000136230 map[1:0xc00012c4c0 2:0xc00012c4a0 3:0xc00012c4b0] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft.go:602: [info] [DEBUG] m.Index & r.prs[from].Next: 10 11
+2022/08/04 01:31:52 raft.go:617: [info] [DEBUG] receive MsgAppendResp reject. send again from entries.Index:10 logterm: 0
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 6 9 [term:6 index:10  term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001362d0 map[1:0xc00012c2e0 2:0xc00012c2f0 3:0xc00012c300] StateFollower map[] [] 0 1 10 11 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 9 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc000136230 map[1:0xc00012c4c0 2:0xc00012c4a0 3:0xc00012c4b0] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 9 11 [] 11 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001362d0 map[1:0xc00012c2e0 2:0xc00012c2f0 3:0xc00012c300] StateFollower map[] [] 1 1 10 11 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 11 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc000136230 map[1:0xc00012c4c0 2:0xc00012c4a0 3:0xc00012c4b0] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 log.go:76: [info] [msg_hup finish.]
+2022/08/04 01:31:52 log.go:76: [info] [vote_response finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 12 1
+2022/08/04 01:31:52 log.go:76: [info] [msg_propose finish.]
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgHup 1 1 0 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 8 0 0xc000137310 map[1:0xc00012cfb0 2:0xc00012cfc0 3:0xc00012cfd0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 2 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{2 7 0 0xc0001373b0 map[1:0xc00012cfe0 2:0xc00012cff0 3:0xc00012d000] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft.go:665: [info] become Follower because Term diff: m & r.Term: 9 7
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 3 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVoteResponse 1 2 9 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc000137310 map[1:0xc00012cfb0 2:0xc00012cfc0 3:0xc00012cfd0] StateCandidate map[1:true] [] 0 1 10 17 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001373b0 map[1:0xc00012cfe0 2:0xc00012cff0 3:0xc00012d000] StateFollower map[] [] 0 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 5 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc000137310 map[1:0xc00012d150 2:0xc00012d160 3:0xc00012d170] StateLeader map[1:true 2:true] [] 1 1 10 18 0 0 0 0}
+2022/08/04 01:31:52 raft.go:602: [info] [DEBUG] m.Index & r.prs[from].Next: 5 11
+2022/08/04 01:31:52 raft.go:617: [info] [DEBUG] receive MsgAppendResp reject. send again from entries.Index:5 logterm: 0
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 4 4 [term:4 index:5  term:5 index:6  term:5 index:7  term:6 index:8  term:6 index:9  term:6 index:10  term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001373b0 map[1:0xc00012cfe0 2:0xc00012cff0 3:0xc00012d000] StateFollower map[] [] 0 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 4 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc000137310 map[1:0xc00012d150 2:0xc00012d160 3:0xc00012d170] StateLeader map[1:true 2:true] [] 1 1 10 18 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 9 11 [] 11 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001373b0 map[1:0xc00012cfe0 2:0xc00012cff0 3:0xc00012d000] StateFollower map[] [] 1 1 10 17 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 11 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc000137310 map[1:0xc00012d150 2:0xc00012d160 3:0xc00012d170] StateLeader map[1:true 2:true] [] 1 1 10 18 0 0 0 0}
+2022/08/04 01:31:52 log.go:76: [info] [msg_hup finish.]
+2022/08/04 01:31:52 log.go:76: [info] [vote_response finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 12 1
+2022/08/04 01:31:52 log.go:76: [info] [msg_propose finish.]
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgHup 1 1 0 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 8 0 0xc0001aa320 map[1:0xc00012ddc0 2:0xc00012ddd0 3:0xc00012dde0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 2 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{2 7 0 0xc0001aa3c0 map[1:0xc00012ddf0 2:0xc00012de00 3:0xc00012de10] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft.go:665: [info] become Follower because Term diff: m & r.Term: 9 7
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 3 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVoteResponse 1 2 9 0 0 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc0001aa320 map[1:0xc00012ddc0 2:0xc00012ddd0 3:0xc00012dde0] StateCandidate map[1:true] [] 0 1 10 11 0 0 0 0}
+2022/08/04 01:31:52 log.go:76: [info] [msg_hup finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 10 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 log.go:76: [info] [vote_response finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 12 1
+2022/08/04 01:31:52 log.go:76: [info] [msg_propose finish.]
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgHup 1 1 0 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 8 0 0xc0001aaf50 map[1:0xc0001ba5b0 2:0xc0001ba5c0 3:0xc0001ba5d0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 2 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{2 7 0 0xc0001aaff0 map[1:0xc0001ba5e0 2:0xc0001ba5f0 3:0xc0001ba600] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft.go:665: [info] become Follower because Term diff: m & r.Term: 9 7
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 3 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVoteResponse 1 2 9 0 0 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc0001aaf50 map[1:0xc0001ba5b0 2:0xc0001ba5c0 3:0xc0001ba5d0] StateCandidate map[1:true] [] 0 1 10 17 0 0 0 0}
+2022/08/04 01:31:52 log.go:76: [info] [msg_hup finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 10 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 log.go:76: [info] [vote_response finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 12 1
+2022/08/04 01:31:52 log.go:76: [info] [msg_propose finish.]
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgHup 1 1 0 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 8 0 0xc0001abb80 map[1:0xc0001bada0 2:0xc0001badb0 3:0xc0001badc0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 2 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{2 7 0 0xc0001abc20 map[1:0xc0001badd0 2:0xc0001bade0 3:0xc0001badf0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft.go:665: [info] become Follower because Term diff: m & r.Term: 9 7
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 3 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVoteResponse 1 2 9 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc0001abb80 map[1:0xc0001bada0 2:0xc0001badb0 3:0xc0001badc0] StateCandidate map[1:true] [] 0 1 10 13 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001abc20 map[1:0xc0001badd0 2:0xc0001bade0 3:0xc0001badf0] StateFollower map[] [] 0 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 8 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc0001abb80 map[1:0xc0001baf40 2:0xc0001baf50 3:0xc0001baf60] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft.go:602: [info] [DEBUG] m.Index & r.prs[from].Next: 8 11
+2022/08/04 01:31:52 raft.go:617: [info] [DEBUG] receive MsgAppendResp reject. send again from entries.Index:8 logterm: 0
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 5 7 [term:6 index:8  term:6 index:9  term:6 index:10  term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001abc20 map[1:0xc0001badd0 2:0xc0001bade0 3:0xc0001badf0] StateFollower map[] [] 0 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 7 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 4 4 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc0001abb80 map[1:0xc0001baf40 2:0xc0001baf50 3:0xc0001baf60] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft.go:602: [info] [DEBUG] m.Index & r.prs[from].Next: 4 8
+2022/08/04 01:31:52 raft.go:617: [info] [DEBUG] receive MsgAppendResp reject. send again from entries.Index:6 logterm: 4
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 4 5 [term:5 index:6  term:5 index:7  term:6 index:8  term:6 index:9  term:6 index:10  term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001abc20 map[1:0xc0001badd0 2:0xc0001bade0 3:0xc0001badf0] StateFollower map[] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 5 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc0001abb80 map[1:0xc0001baf40 2:0xc0001baf50 3:0xc0001baf60] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 11 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 9 11 [] 11 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001abc20 map[1:0xc0001badd0 2:0xc0001bade0 3:0xc0001badf0] StateFollower map[] [] 1 1 10 18 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc0001abb80 map[1:0xc0001baf40 2:0xc0001baf50 3:0xc0001baf60] StateLeader map[1:true 2:true] [] 1 1 10 15 0 0 0 0}
+2022/08/04 01:31:52 log.go:76: [info] [msg_hup finish.]
+2022/08/04 01:31:52 log.go:76: [info] [vote_response finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 12 1
+2022/08/04 01:31:52 log.go:76: [info] [msg_propose finish.]
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgHup 1 1 0 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 8 0 0xc0001cacd0 map[1:0xc0001bbdb0 2:0xc0001bbdc0 3:0xc0001bbdd0] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 2 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{2 7 0 0xc0001cad70 map[1:0xc0001bbde0 2:0xc0001bbdf0 3:0xc0001bbe00] StateFollower map[] [] 0 1 10 0 0 0 0 0}
+2022/08/04 01:31:52 raft.go:665: [info] become Follower because Term diff: m & r.Term: 9 7
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVote 3 1 9 6 10 [] 0 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgRequestVoteResponse 1 2 9 0 0 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc0001cacd0 map[1:0xc0001bbdb0 2:0xc0001bbdc0 3:0xc0001bbdd0] StateCandidate map[1:true] [] 0 1 10 10 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001cad70 map[1:0xc0001bbde0 2:0xc0001bbdf0 3:0xc0001bbe00] StateFollower map[] [] 0 1 10 19 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 10 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 3 7 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc0001cacd0 map[1:0xc0001bbf50 2:0xc0001bbf60 3:0xc0001bbf70] StateLeader map[1:true 2:true] [] 1 1 10 12 0 0 0 0}
+2022/08/04 01:31:52 raft.go:602: [info] [DEBUG] m.Index & r.prs[from].Next: 7 11
+2022/08/04 01:31:52 raft.go:617: [info] [DEBUG] receive MsgAppendResp reject. send again from entries.Index:7 logterm: 3
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 5 6 [term:5 index:7  term:6 index:8  term:6 index:9  term:6 index:10  term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001cad70 map[1:0xc0001bbde0 2:0xc0001bbdf0 3:0xc0001bbe00] StateFollower map[] [] 1 1 10 10 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 6 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 2 4 [] 0 <nil> true {} [] 0} ,Node:&{1 9 1 0xc0001cacd0 map[1:0xc0001bbf50 2:0xc0001bbf60 3:0xc0001bbf70] StateLeader map[1:true 2:true] [] 1 1 10 12 0 0 0 0}
+2022/08/04 01:31:52 raft.go:602: [info] [DEBUG] m.Index & r.prs[from].Next: 4 7
+2022/08/04 01:31:52 raft.go:617: [info] [DEBUG] receive MsgAppendResp reject. send again from entries.Index:4 logterm: 2
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 1 3 [term:4 index:4  term:4 index:5  term:5 index:6  term:5 index:7  term:6 index:8  term:6 index:9  term:6 index:10  term:9 index:11 ] 10 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001cad70 map[1:0xc0001bbde0 2:0xc0001bbdf0 3:0xc0001bbe00] StateFollower map[] [] 1 1 10 18 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 3 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc0001cacd0 map[1:0xc0001bbf50 2:0xc0001bbf60 3:0xc0001bbf70] StateLeader map[1:true 2:true] [] 1 1 10 12 0 0 0 0}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 2 1 9 9 11 [] 11 <nil> false {} [] 0} ,Node:&{2 9 1 0xc0001cad70 map[1:0xc0001bbde0 2:0xc0001bbdf0 3:0xc0001bbe00] StateFollower map[] [] 1 1 10 13 0 0 0 0}
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppend 3 1 9 6 10 [term:9 index:11 ] 11 <nil> false {} [] 0} ,Node:&{}
+2022/08/04 01:31:52 raft_test.go:1618: [info] [DEBUG] network msg:{MsgAppendResponse 1 2 9 0 11 [] 0 <nil> false {} [] 0} ,Node:&{1 9 1 0xc0001cacd0 map[1:0xc0001bbf50 2:0xc0001bbf60 3:0xc0001bbf70] StateLeader map[1:true 2:true] [] 1 1 10 12 0 0 0 0}
+2022/08/04 01:31:52 log.go:76: [info] [msg_hup finish.]
+2022/08/04 01:31:52 log.go:76: [info] [vote_response finish.]
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 11 1
+2022/08/04 01:31:52 raft.go:719: [info] [DEBUG]+++ 12 1
+2022/08/04 01:31:52 log.go:76: [info] [msg_propose finish.]
+2022/08/04 01:35:10.859386 log.go:124: [fatal] [Unable to open value log: Unable to preallocate value log file: no space left on device]

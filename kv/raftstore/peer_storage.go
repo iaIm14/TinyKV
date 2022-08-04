@@ -372,7 +372,32 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 	// and send RegionTaskApply task to region worker through ps.regionSched, also remember call ps.clearMeta
 	// and ps.clearExtraData to delete stale data
 	// Your Code Here (2C).
-	return nil, nil
+	if ps.isInitialized() {
+		ps.clearMeta(kvWB, raftWB)
+		ps.clearExtraData(snapData.Region)
+	}
+	ps.applyState.TruncatedState.Index = snapshot.Metadata.Index
+	ps.applyState.TruncatedState.Term = snapshot.Metadata.Term
+	ps.applyState.AppliedIndex = snapshot.Metadata.Index
+	ps.raftState.LastIndex = snapshot.Metadata.Index
+	ps.raftState.LastTerm = snapshot.Metadata.Term
+
+	ps.snapState.StateType = snap.SnapState_Applying
+	status := make(chan bool)
+	ps.regionSched <- &runner.RegionTaskApply{
+		RegionId: snapData.Region.Id,
+		SnapMeta: snapshot.Metadata,
+		StartKey: snapData.Region.StartKey,
+		EndKey:   snapData.Region.EndKey,
+		Notifier: status,
+	}
+	if ret := <-status; ret {
+		ps.snapState.StateType = snap.SnapState_Relax
+	} else {
+		// panic
+		return nil, nil
+	}
+	return &ApplySnapResult{PrevRegion: ps.region, Region: snapData.Region}, nil
 }
 
 // Save memory states to disk.
@@ -409,12 +434,15 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	// }
 	// return nil, nil
 	raftWB := new(engine_util.WriteBatch)
+	kvWB := new(engine_util.WriteBatch)
 	var result *ApplySnapResult
 	var err error
 	if !raft.IsEmptySnap(&ready.Snapshot) {
-		kvWB := new(engine_util.WriteBatch)
+		// raftWB := new(engine_util.WriteBatch)
+		// kvWB := new(engine_util.WriteBatch)
 		result, err = ps.ApplySnapshot(&ready.Snapshot, kvWB, raftWB)
-		kvWB.WriteToDB(ps.Engines.Kv)
+		// kvWB.WriteToDB(ps.Engines.Kv)
+		// raftWB.WriteToDB(ps.Engines.Raft)
 	}
 	ps.Append(ready.Entries, raftWB)
 	if !raft.IsEmptyHardState(ready.HardState) {
@@ -422,6 +450,7 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	}
 	raftWB.SetMeta(meta.RaftStateKey(ps.region.GetId()), ps.raftState)
 	raftWB.WriteToDB(ps.Engines.Raft)
+	kvWB.WriteToDB(ps.Engines.Kv)
 	return result, err
 }
 
