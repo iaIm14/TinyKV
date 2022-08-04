@@ -81,6 +81,5 @@ func CreateDB(path string, raft bool) *badger.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Infof("[DEBUG] CreateDB finish : %v", db)
 	return db
 }

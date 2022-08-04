@@ -108,10 +108,6 @@ func (d *peerMsgHandler) processRequest(entry *eraftpb.Entry, req *raft_cmdpb.Re
 		case raft_cmdpb.CmdType_Delete:
 			resp.Responses = []*raft_cmdpb.Response{{CmdType: raft_cmdpb.CmdType_Delete, Delete: &raft_cmdpb.DeleteResponse{}}}
 		case raft_cmdpb.CmdType_Snap:
-			// if msg.Header.RegionEpoch.Version != d.Region().RegionEpoch.Version {
-			// 	p.cb.Done(ErrResp(&util.ErrEpochNotMatch{}))
-			// 	return
-			// }
 			d.peerStorage.applyState.AppliedIndex = entry.Index
 			wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
 			wb.WriteToDB(d.peerStorage.Engines.Kv)
@@ -330,54 +326,56 @@ func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb 
 	// }
 }
 func (d *peerMsgHandler) proposeRequest(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
-	for {
-		if len(msg.Requests) == 0 {
-			break
-		}
-		req := msg.Requests[0]
-		key := make([]byte, 0)
-		switch req.CmdType {
-		case raft_cmdpb.CmdType_Delete:
-			key = req.Delete.Key
-		case raft_cmdpb.CmdType_Invalid:
-		case raft_cmdpb.CmdType_Get:
-			key = req.Get.Key
-		case raft_cmdpb.CmdType_Put:
-			key = req.Put.Key
-		case raft_cmdpb.CmdType_Snap:
-		}
-		if len(key) != 0 {
-			err := util.CheckKeyInRegion(key, d.Region())
-			if err != nil {
-				cb.Done(ErrResp(err))
-				// debug left
-				return
-			}
-		}
-		data, err := req.Marshal()
+	// for {
+	if len(msg.Requests) == 0 {
+		return
+		// break
+	}
+	req := msg.Requests[0]
+	key := make([]byte, 0)
+	switch req.CmdType {
+	case raft_cmdpb.CmdType_Delete:
+		key = req.Delete.Key
+	case raft_cmdpb.CmdType_Invalid:
+	case raft_cmdpb.CmdType_Get:
+		key = req.Get.Key
+	case raft_cmdpb.CmdType_Put:
+		key = req.Put.Key
+	case raft_cmdpb.CmdType_Snap:
+	}
+	if len(key) != 0 {
+		err := util.CheckKeyInRegion(key, d.Region())
 		if err != nil {
 			cb.Done(ErrResp(err))
-			// debuginfo
+			// debug left
 			return
 		}
-		// data, err := msg.Marshal()
-		// if err != nil {
-		// 	cb.Done(ErrResp(err))
-		// 	return
-		// }
-		// debug
-		proposal := &proposal{
-			index: d.nextProposalIndex(),
-			term:  d.Term(),
-			cb:    cb,
-		}
-		d.RaftGroup.Propose(data)
-		// log.Infof("[DEBUG]+ proposals append: %v", proposal)
-		d.proposals = append(d.proposals, proposal)
-		// log.Infof("[DEBUG]+ now peerMsgHandler.oldProposals: %v", d.proposals)
-		// log.Info("[DEBUG]+ proposeRequest end.")
-		msg.Requests = msg.Requests[1:]
 	}
+	data, err := req.Marshal()
+	if err != nil {
+		cb.Done(ErrResp(err))
+		// debuginfo
+		return
+	}
+	// data, err := msg.Marshal()
+	// if err != nil {
+	// 	cb.Done(ErrResp(err))
+	// 	return
+	// }
+	// debug
+	proposal := &proposal{
+		index: d.nextProposalIndex(),
+		term:  d.Term(),
+		cb:    cb,
+	}
+	d.RaftGroup.Propose(data)
+	// log.Infof("[DEBUG]+ proposals append: %v", proposal)
+	d.proposals = append(d.proposals, proposal)
+	// log.Infof("[DEBUG]+ now peerMsgHandler.oldProposals: %v", d.proposals)
+	// log.Info("[DEBUG]+ proposeRequest end.")
+
+	// msg.Requests = msg.Requests[1:]
+	// }
 }
 func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	err := d.preProposeRaftCommand(msg)

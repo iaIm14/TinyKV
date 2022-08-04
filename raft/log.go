@@ -89,15 +89,25 @@ func newLog(storage Storage) *RaftLog {
 // storage compact stabled log entries prevent the log entries
 // grow unlimitedly in memory
 func (l *RaftLog) maybeCompact() {
-
 	// Your Code Here (2C).
+	firstIndex, err := l.storage.FirstIndex()
+	if err != nil {
+		return
+	}
+	if firstIndex > l.FirstIndex {
+		if len(l.entries) != 0 {
+			entries := l.getEntries(firstIndex, l.LastIndex())
+			l.entries = entries
+		}
+		l.FirstIndex = firstIndex
+	}
 }
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
 	if l.stabled >= l.LastIndex() {
-		log.Info("[ERROR] l.stabled >=l.lastIndex")
+		// log.Info("[ERROR] l.stabled >=l.lastIndex")
 		return []pb.Entry{}
 	}
 	return l.getEntries(l.stabled+1, l.LastIndex()+1)
@@ -107,7 +117,7 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
 	if l.applied >= l.LastIndex() {
-		log.Info("[ERROR] l.applied >=l.lastIndex")
+		// log.Info("[ERROR] l.applied >=l.lastIndex")
 		return []pb.Entry{}
 	}
 	return l.getEntries(l.applied+1, l.committed+1)
@@ -144,9 +154,12 @@ func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
-	if len(l.entries) == 0 {
+	// stale snapshot discarded. debuginfo
+	if len(l.entries) == 0 && IsEmptySnap(l.pendingSnapshot) {
 		ret, _ := l.storage.LastIndex()
 		return ret
+	} else if len(l.entries) == 0 && !IsEmptySnap(l.pendingSnapshot) {
+		return l.pendingSnapshot.Metadata.Index
 	} else {
 		return uint64(len(l.entries)) + l.FirstIndex - 1
 	}
@@ -155,13 +168,26 @@ func (l *RaftLog) LastIndex() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-	if i > l.LastIndex() {
-		return 0, nil
-	}
+	// if i > l.LastIndex() {
+	// 	log.Info("[ERROR] lastIndex > prevLogIndex")
+	// 	return 0, ErrCompacted
+	// }
 	if len(l.entries) > 0 && i >= l.FirstIndex {
 		return l.entries[i-l.FirstIndex].Term, nil
 	}
-	return l.storage.Term(i)
+	ret, err := l.storage.Term(i)
+	if err == ErrUnavailable && !IsEmptySnap(l.pendingSnapshot) {
+		if i == l.pendingSnapshot.Metadata.Index {
+			return l.pendingSnapshot.Metadata.Term, nil
+		} else if i < l.pendingSnapshot.Metadata.Index {
+			log.Info("[DEBUG] return ErrCompacted")
+			return ret, ErrCompacted
+		} else {
+			log.Info("[DEBUG] return err: %v", err.Error())
+			return ret, err
+		}
+	}
+	return ret, err
 }
 
 // LastTerm return last term
