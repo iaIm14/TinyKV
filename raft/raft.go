@@ -147,6 +147,8 @@ type Raft struct {
 	// valid message from current leader when it is a follower.
 	electionElapsed int
 
+	leadTransfereeElapsed int
+
 	// leadTransferee is id of the leader transfer target when its value is not zero.
 	// Follow the procedure defined in section 3.10 of Raft phd thesis.
 	// (https://web.stanford.edu/~ouster/cgi-bin/papers/OngaroPhD.pdf)
@@ -317,6 +319,14 @@ func (r *Raft) tick() {
 	// Your Code Here (2A).
 	switch r.State {
 	case StateLeader:
+		if r.leadTransferee != None {
+			// r.leadTransferee
+			r.leadTransfereeElapsed++
+			if r.leadTransfereeElapsed >= r.electionTimeout*2 {
+				r.leadTransfereeElapsed = 0
+				r.leadTransferee = None
+			}
+		}
 		r.heartbeatElapsed++
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
 			r.heartbeatElapsed = 0
@@ -339,6 +349,8 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.votes = make(map[uint64]bool)
 	r.heartbeatElapsed = 0
 	r.electionElapsed = 0
+	r.leadTransferee = None
+	r.leadTransfereeElapsed = 0
 
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 	// Your Code Here (2A).
@@ -355,6 +367,8 @@ func (r *Raft) becomeCandidate() {
 	r.State = StateCandidate
 	r.electionElapsed = 0
 	r.heartbeatElapsed = 0
+	r.leadTransferee = None
+	r.leadTransfereeElapsed = 0
 
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 	if len(r.Prs) <= 1 {
@@ -408,7 +422,7 @@ func (r *Raft) handleRequestVote(m pb.Message) {
 		Reject:  false,
 		MsgType: pb.MessageType_MsgRequestVoteResponse,
 	}
-	if m.Term < r.Term {
+	if m.Term != None && m.Term < r.Term {
 		msg.Reject = true
 		r.msgs = append(r.msgs, msg)
 		return
@@ -446,10 +460,25 @@ func (r *Raft) BcastAppend() {
 // AppendEntries append entries from ents... to local Raft
 // only Leader uses this function
 func (r *Raft) AppendEntries(entries ...*pb.Entry) {
+	if r.leadTransferee != None {
+		return
+	}
 	lastIndex := r.RaftLog.LastIndex()
 	for i, v := range entries {
 		v.Index = lastIndex + uint64(i) + 1
 		v.Term = r.Term
+		if v.EntryType == pb.EntryType_EntryConfChange {
+			if r.PendingConfIndex != None {
+				log.Infof("[DEBUG] PendingConfIndex:%v r.raftlog.applied:%v, ent.index:%v", r.PendingConfIndex, r.RaftLog.applied, v.Index)
+				if r.PendingConfIndex > r.RaftLog.applied {
+					v.EntryType = pb.EntryType_EntryNormal
+					v.Data = make([]byte, 0)
+				}
+			} else {
+				r.PendingConfIndex = v.Index
+				// debuginfo: old pendingConfEntry:MsgType still PendingConfIndex
+			}
+		}
 		r.RaftLog.entries = append(r.RaftLog.entries, *v)
 	}
 	// log.Infof("[DEBUG]+ noopEntry: %v; r.id:%v", entries, r.id)
@@ -512,6 +541,7 @@ func (r *Raft) raiseElection() {
 	// note logterm&Index in MessageSend
 	lastLogIndex := r.RaftLog.LastIndex()
 	lastLogTerm, _ := r.RaftLog.LastTerm()
+
 	for i := range r.Prs {
 		if i == r.id {
 			continue
@@ -529,7 +559,7 @@ func (r *Raft) raiseElection() {
 
 func (r *Raft) handleRequestVoteResponse(m pb.Message) {
 	// log.Infof("[DEBUG] Candidate receive MsgRequestVoteResponse from %v", m.From)
-	if m.Term < r.Term {
+	if m.Term != None && m.Term < r.Term {
 		return
 	}
 	r.votes[m.From] = !m.Reject
@@ -571,9 +601,16 @@ func (r *Raft) StepFollower(m pb.Message) error {
 	case pb.MessageType_MsgRequestVoteResponse:
 		log.Infof("[ERROR] Follower receive MsgRequestVoteResponse from %v", m.From)
 	case pb.MessageType_MsgTimeoutNow:
-		log.Info("[ERROR] MessageType_MsgTimeoutNow occur.")
+		log.Info("[DEBUG] MessageType_MsgTimeoutNow occur.")
+		log.Infof("%v receive MessageType_MsgTimeoutNow from %v", r.id, m.From)
+		r.raiseElection()
 	case pb.MessageType_MsgTransferLeader:
-		log.Info("[ERROR] MessageType_MsgTransferLeader occur.")
+		log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
+		if r.Lead == None {
+			return nil
+		}
+		m.To = r.Lead
+		r.msgs = append(r.msgs, m)
 	default:
 	}
 	return nil
@@ -595,10 +632,16 @@ func (r *Raft) StepCandidate(m pb.Message) error {
 	case pb.MessageType_MsgHeartbeat:
 		r.handleHeartbeat(m)
 	case pb.MessageType_MsgTransferLeader:
-		log.Info("[ERROR] MessageType_MsgTransferLeader occur.")
+		log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
+		if r.Lead == None {
+			return nil
+		}
+		m.To = r.Lead
+		r.msgs = append(r.msgs, m)
 	case pb.MessageType_MsgRequestVoteResponse:
 		r.handleRequestVoteResponse(m)
 	case pb.MessageType_MsgTimeoutNow:
+		log.Info("[ERROR] MessageType_MsgTimeoutNow occur.")
 	default:
 	}
 	return nil
@@ -622,7 +665,7 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	}
 }
 func (r *Raft) handleAppendResponse(m pb.Message) {
-	if m.Term < r.Term {
+	if m.Term != None && m.Term < r.Term {
 		return
 	}
 	if m.Reject {
@@ -653,9 +696,46 @@ func (r *Raft) handleAppendResponse(m pb.Message) {
 			if r.UpdateCommit() {
 				r.BcastAppend()
 			}
+			if m.Index == r.RaftLog.LastIndex() && r.leadTransferee != None && r.leadTransferee == m.From {
+				r.sendTimeout(r.leadTransferee)
+				// debuginfo
+			}
 		}
 	}
 }
+
+func (r *Raft) sendTimeout(to uint64) {
+	msg := pb.Message{
+		MsgType: pb.MessageType_MsgTimeoutNow,
+		From:    r.id,
+		To:      to,
+	}
+	r.msgs = append(r.msgs, msg)
+}
+func (r *Raft) handleTransferLeader(m pb.Message) {
+	// m.from==Transferee
+	if m.From == r.id || r.Prs[m.From] == nil {
+		return
+	}
+	if r.leadTransferee != None {
+		if r.leadTransferee == m.From {
+			return
+		} else {
+			// Node before can't be leader(no resp)
+			// debuginfo
+			// return
+		}
+	}
+	log.Infof("%v start transferring to %v", r.id, m.From)
+	r.leadTransferee = m.From
+	// r.leadTransfereeTimeout = 0
+	if r.RaftLog.LastIndex() == r.Prs[r.leadTransferee].Match {
+		r.sendTimeout(r.leadTransferee)
+	} else {
+		r.sendAppend(r.leadTransferee)
+	}
+}
+
 func (r *Raft) StepLeader(m pb.Message) error {
 	switch m.MsgType {
 	case pb.MessageType_MsgBeat:
@@ -677,7 +757,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	case pb.MessageType_MsgRequestVote:
 		r.handleRequestVote(m)
 	case pb.MessageType_MsgTransferLeader:
-		log.Info("[ERROR] MessageType_MsgTransferLeader occur.")
+		r.handleTransferLeader(m)
 	case pb.MessageType_MsgHeartbeat:
 		r.handleHeartbeat(m)
 	case pb.MessageType_MsgAppendResponse:
@@ -691,6 +771,9 @@ func (r *Raft) StepLeader(m pb.Message) error {
 }
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A)
+	if r.id != None && r.Prs[r.id] == nil {
+		return nil
+	}
 	// log.Infof("[DEBUG] INTO Step1 Phase. message: %v", m)
 	switch {
 	case m.Term == 0:
@@ -865,7 +948,7 @@ func (r *Raft) handleHeartbeat(m pb.Message) {
 		From:    r.id,
 		Term:    r.Term,
 	}
-	if m.Term < r.Term {
+	if m.Term != None && m.Term < r.Term {
 		msg.Reject = true
 		// older Leader transfer to Follower
 	} else {
@@ -936,11 +1019,28 @@ func (r *Raft) handleSnapshot(m pb.Message) {
 // addNode add a new node to raft group
 func (r *Raft) addNode(id uint64) {
 	// Your Code Here (3A).
+	if r.Prs[id] != nil {
+		return
+	}
+	r.Prs[id] = &Progress{}
+	r.PendingConfIndex = None
 }
 
 // removeNode remove a node from raft group
 func (r *Raft) removeNode(id uint64) {
 	// Your Code Here (3A).
+	removeable := (r.Prs[id] != nil)
+	// r.id== id
+	// removeable = removeable && (len(r.Prs) >= 1)
+	if removeable {
+		delete(r.Prs, id)
+		r.PendingConfIndex = None
+		if r.State == StateLeader && r.id != id {
+			if r.UpdateCommit() {
+				r.BcastAppend()
+			}
+		}
+	}
 }
 
 // add for 2AC
