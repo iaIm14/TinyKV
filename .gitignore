@@ -7,4 +7,4 @@ _tools
 /vendor
 kv/test_raftstore/tmp/*
 test.sh
-output_2*
+output_2.log

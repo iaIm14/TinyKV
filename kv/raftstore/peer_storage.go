@@ -383,6 +383,8 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 	ps.raftState.LastTerm = snapshot.Metadata.Term
 
 	ps.snapState.StateType = snap.SnapState_Applying
+	kvWB.SetMeta(meta.ApplyStateKey(snapData.Region.GetId()), ps.applyState)
+
 	status := make(chan bool)
 	ps.regionSched <- &runner.RegionTaskApply{
 		RegionId: snapData.Region.Id,
@@ -397,7 +399,10 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 		// panic
 		return nil, nil
 	}
-	return &ApplySnapResult{PrevRegion: ps.region, Region: snapData.Region}, nil
+	result := &ApplySnapResult{PrevRegion: ps.region, Region: snapData.Region}
+	ps.SetRegion(snapData.Region)
+	meta.WriteRegionState(kvWB, ps.region, rspb.PeerState_Normal)
+	return result, nil
 }
 
 // Save memory states to disk.
@@ -438,11 +443,11 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	var result *ApplySnapResult
 	var err error
 	if !raft.IsEmptySnap(&ready.Snapshot) {
-		// raftWB := new(engine_util.WriteBatch)
-		// kvWB := new(engine_util.WriteBatch)
+		raftWB := new(engine_util.WriteBatch)
+		kvWB := new(engine_util.WriteBatch)
 		result, err = ps.ApplySnapshot(&ready.Snapshot, kvWB, raftWB)
-		// kvWB.WriteToDB(ps.Engines.Kv)
-		// raftWB.WriteToDB(ps.Engines.Raft)
+		kvWB.WriteToDB(ps.Engines.Kv)
+		raftWB.WriteToDB(ps.Engines.Raft)
 	}
 	ps.Append(ready.Entries, raftWB)
 	if !raft.IsEmptyHardState(ready.HardState) {

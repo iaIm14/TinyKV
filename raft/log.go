@@ -90,13 +90,16 @@ func newLog(storage Storage) *RaftLog {
 // grow unlimitedly in memory
 func (l *RaftLog) maybeCompact() {
 	// Your Code Here (2C).
-	firstIndex, err := l.storage.FirstIndex()
-	if err != nil {
-		return
-	}
+	// MemoryStorage.entries[0].Index+1==FirstIndex
+	// dummy entries
+	firstIndex, _ := l.storage.FirstIndex()
+	// if err != nil {
+	// 	return
+	// }
+	// RaftLog.entries contains [maybeFirstIndex==latest Snapshot's lastindex+1,lastindex]
 	if firstIndex > l.FirstIndex {
 		if len(l.entries) != 0 {
-			entries := l.getEntries(firstIndex, l.LastIndex())
+			entries := l.getEntries(firstIndex, l.LastIndex()+1)
 			l.entries = entries
 		}
 		l.FirstIndex = firstIndex
@@ -116,7 +119,7 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	if l.applied >= l.LastIndex() {
+	if l.applied >= l.committed {
 		// log.Info("[ERROR] l.applied >=l.lastIndex")
 		return []pb.Entry{}
 	}
@@ -126,8 +129,9 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 // getEntries return all Entry Index between [lo,ro)
 func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 	lastIndex := l.LastIndex()
+	firstIndex, _ := l.storage.FirstIndex()
 	// note ro > lastIndex +1
-	if lo > lastIndex || ro > lastIndex+1 || lo == ro {
+	if lo > lastIndex || ro > lastIndex+1 || lo == ro || lo < firstIndex {
 		return []pb.Entry{}
 	}
 	if len(l.entries) > 0 {
@@ -155,39 +159,61 @@ func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
 	// stale snapshot discarded. debuginfo
-	if len(l.entries) == 0 && IsEmptySnap(l.pendingSnapshot) {
-		ret, _ := l.storage.LastIndex()
-		return ret
-	} else if len(l.entries) == 0 && !IsEmptySnap(l.pendingSnapshot) {
-		return l.pendingSnapshot.Metadata.Index
-	} else {
-		return uint64(len(l.entries)) + l.FirstIndex - 1
+	var index uint64
+	if !IsEmptySnap(l.pendingSnapshot) {
+		index = l.pendingSnapshot.Metadata.Index
 	}
+	if len(l.entries) > 0 {
+		return max(l.entries[len(l.entries)-1].Index, index)
+	}
+	i, _ := l.storage.LastIndex()
+	return max(i, index)
+	// if len(l.entries) == 0 && IsEmptySnap(l.pendingSnapshot) {
+	// 	ret, _ := l.storage.LastIndex()
+	// 	return ret
+	// } else if len(l.entries) == 0 && !IsEmptySnap(l.pendingSnapshot) {
+	// 	return l.pendingSnapshot.Metadata.Index
+	// } else {
+	// 	return uint64(len(l.entries)) + l.FirstIndex - 1
+	// }
 }
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
-	// Your Code Here (2A).
-	// if i > l.LastIndex() {
-	// 	log.Info("[ERROR] lastIndex > prevLogIndex")
-	// 	return 0, ErrCompacted
-	// }
 	if len(l.entries) > 0 && i >= l.FirstIndex {
 		return l.entries[i-l.FirstIndex].Term, nil
 	}
-	ret, err := l.storage.Term(i)
+	term, err := l.storage.Term(i)
 	if err == ErrUnavailable && !IsEmptySnap(l.pendingSnapshot) {
 		if i == l.pendingSnapshot.Metadata.Index {
-			return l.pendingSnapshot.Metadata.Term, nil
+			term = l.pendingSnapshot.Metadata.Term
+			err = nil
 		} else if i < l.pendingSnapshot.Metadata.Index {
-			log.Info("[DEBUG] return ErrCompacted")
-			return ret, ErrCompacted
-		} else {
-			log.Info("[DEBUG] return err: %v", err.Error())
-			return ret, err
+			err = ErrCompacted
 		}
 	}
-	return ret, err
+	return term, err
+	// // Your Code Here (2A).
+	// // if i > l.LastIndex() {
+	// // 	log.Info("[ERROR] lastIndex > prevLogIndex")
+	// // 	return 0, ErrCompacted
+	// // }
+	// if len(l.entries) > 0 && i >= l.FirstIndex {
+	// 	return l.entries[i-l.FirstIndex].Term, nil
+	// }
+	// ret, err := l.storage.Term(i)
+	// if err == ErrUnavailable && !IsEmptySnap(l.pendingSnapshot) {
+	// 	if i == l.pendingSnapshot.Metadata.Index {
+	// 		return l.pendingSnapshot.Metadata.Term, nil
+	// 	} else if i < l.pendingSnapshot.Metadata.Index {
+	// 		// log.Info("[DEBUG] return ErrCompacted")
+	// 		return ret, ErrCompacted
+	// 	} else {
+	// 		// log.Info("[DEBUG] return err: %v", err.Error())
+	// 		return ret, err
+	// 	}
+	// }
+	// return ret, err
 }
 
 // LastTerm return last term
@@ -222,4 +248,16 @@ func (l *RaftLog) BaseAppendEntries(entries ...*pb.Entry) {
 			l.entries = append(l.entries, *v)
 		}
 	}
+}
+
+func (l *RaftLog) toSliceIndex(i uint64) int {
+	idx := int(i - l.FirstIndex)
+	if idx < 0 {
+		panic("toSliceIndex: index < 0")
+	}
+	return idx
+}
+
+func (l *RaftLog) toEntryIndex(i int) uint64 {
+	return uint64(i) + l.FirstIndex
 }

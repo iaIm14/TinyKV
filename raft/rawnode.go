@@ -185,7 +185,8 @@ func (rn *RawNode) HasReady() bool {
 	ret := len(rn.Raft.msgs) != 0 || len(rn.Raft.RaftLog.nextEnts()) != 0 || len(rn.Raft.RaftLog.unstableEntries()) != 0 ||
 		// !isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) ||
 		// debuginfo:preSoftState changes in Ready() function
-		(!isHardStateEqual(rn.preHardState, rn.Raft.HardState()) && !IsEmptyHardState(rn.Raft.HardState()))
+		(!isHardStateEqual(rn.preHardState, rn.Raft.HardState()) && !IsEmptyHardState(rn.Raft.HardState())) ||
+		(!IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot))
 	// if ret {
 	// log.Infof("[DEBUG]soft :%v %v", *rn.preSoftState, *rn.Raft.SoftState())
 	// log.Infof("[DEBUG]hard :%v %v", rn.preHardState, rn.Raft.HardState())
