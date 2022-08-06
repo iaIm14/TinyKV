@@ -1186,7 +1186,6 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, s)
 	r.becomeCandidate()
 	r.becomeLeader()
-
 	// Begin to remove the second node.
 	cc := pb.ConfChange{
 		ChangeType: pb.ConfChangeType_RemoveNode,
@@ -1207,7 +1206,7 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 		t.Fatalf("unexpected committed entries: %v", ents)
 	}
 	ccIndex := r.RaftLog.LastIndex()
-
+	log.Info("propose ConfChange finished")
 	// While the config change is pending, make another proposal.
 	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgPropose,
@@ -1215,7 +1214,7 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 			{EntryType: pb.EntryType_EntryNormal, Data: []byte("hello")},
 		},
 	})
-
+	log.Info("propose hello finished")
 	// Node 2 acknowledges the config change, committing it.
 	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgAppendResponse,
@@ -1224,6 +1223,8 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 		Term:    r.Term,
 	})
 	ents := nextEnts(r, s)
+	log.Info("step(MsgApp) finished")
+
 	if len(ents) != 2 {
 		t.Fatalf("expected two committed entries, got %v", ents)
 	}
@@ -1415,10 +1416,12 @@ func TestLeaderTransferSecondTransferToAnotherNode3A(t *testing.T) {
 	nt.isolate(3)
 
 	lead := nt.peers[1].(*Raft)
-
-	nt.send(pb.Message{From: 3, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
+	log.Infof("MsgHup finished")
+	nt.send_debug(t, pb.Message{From: 3, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
+	log.Infof("3 to 1 transfer finished")
 	// Transfer leadership to another node.
-	nt.send(pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
+	nt.send_debug(t, pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
+	log.Infof("2 to 1 transfer finished")
 
 	checkLeaderTransferState(t, lead, StateFollower, 2)
 }

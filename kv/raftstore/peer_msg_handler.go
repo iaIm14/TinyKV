@@ -151,6 +151,15 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, req *raft_cmd
 			wb.SetMeta(meta.ApplyStateKey(d.regionId), applySt)
 			d.ScheduleCompactLog(applySt.TruncatedState.Index)
 		}
+	case raft_cmdpb.AdminCmdType_TransferLeader:
+		leaderTransferee := req.GetTransferLeader()
+		err := leaderTransferee.Unmarshal(entry.Data)
+		if err != nil {
+			panic(err)
+		}
+		d.RaftGroup.TransferLeader(leaderTransferee.Peer.Id)
+		wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
+		wb.WriteToDB(d.peerStorage.Engines.Kv)
 	}
 	return wb
 }
