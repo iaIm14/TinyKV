@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/message"
-	"github.com/pingcap-incubator/tinykv/log"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
 
@@ -16,10 +15,6 @@ import (
 type peerState struct {
 	closed uint32
 	peer   *peer
-}
-
-func (ps *peerState) show() {
-	log.Infof("[DEBUG]+ peer proposals: %v, regionID: %v", ps.peer.proposals, ps.peer.regionId)
 }
 
 // router routes a message to a peer.

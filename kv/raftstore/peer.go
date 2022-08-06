@@ -150,7 +150,7 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(region.GetPeers()) == 1 && region.GetPeers()[0].GetStoreId() == storeId {
-		log.Infof("[DEBUG] call rawnode.campaign ")
+		// log.Infof("[DEBUG] call rawnode.campaign ")
 		err = p.RaftGroup.Campaign()
 		if err != nil {
 			return nil, err
@@ -336,7 +336,6 @@ func (p *peer) MaybeCampaign(parentIsLeader bool) bool {
 
 	// If last peer is the leader of the region before split, it's intuitional for
 	// it to become the leader of new split region.
-	log.Info("[DEBUG] call rawnode campaign")
 	p.RaftGroup.Campaign()
 	return true
 }

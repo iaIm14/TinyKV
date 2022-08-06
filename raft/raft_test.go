@@ -601,8 +601,6 @@ func TestHandleMessageType_MsgAppend2AB(t *testing.T) {
 		sm.handleAppendEntries(tt.m)
 		if sm.RaftLog.LastIndex() != tt.wIndex {
 			t.Errorf("#%d: lastIndex = %d, want %d", i, sm.RaftLog.LastIndex(), tt.wIndex)
-			log.Infof("[DEBUG] error")
-			log.Infof("#%d: lastIndex = %d, want %d", i, sm.RaftLog.LastIndex(), tt.wIndex)
 		}
 		if sm.RaftLog.committed != tt.wCommit {
 			t.Errorf("#%d: committed = %d, want %d", i, sm.RaftLog.committed, tt.wCommit)
@@ -1111,18 +1109,19 @@ func TestSlowNodeRestore2C(t *testing.T) {
 	nt.storage[1].Compact(lead.RaftLog.applied)
 
 	nt.recover()
-
+	log.Info("recover finished")
 	// send heartbeats so that the leader can learn everyone is active.
 	// node 3 will only be considered as active when node 1 receives a reply from it.
-	nt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
-
+	nt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
+	log.Info("MsgBeat finished")
 	// trigger a snapshot
-	nt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
-
+	nt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
+	log.Info("Propose finished")
 	follower := nt.peers[3].(*Raft)
 
 	// trigger a commit
-	nt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
+	nt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
+	log.Info("Propose trigger commit finished")
 	if follower.RaftLog.committed != lead.RaftLog.committed {
 		t.Errorf("follower.committed = %d, want %d", follower.RaftLog.committed, lead.RaftLog.committed)
 	}

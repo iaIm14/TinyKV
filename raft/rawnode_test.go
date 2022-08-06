@@ -179,11 +179,11 @@ func TestRawNodeStart2AC(t *testing.T) {
 		t.Errorf("got %+v %+v , want %+v", rd.Entries[0].Data, rd.CommittedEntries[0].Data, []byte("foo"))
 	}
 	storage.Append(rd.Entries)
-	t.Logf("[DEBUG]rawNode.SoftState&Hardstate :%v %v", *rawNode.preSoftState, rawNode.preHardState)
-	t.Logf("[DEBUG]NewNode.SoftState&Hardstate :%v %v", *rawNode.Raft.SoftState(), rawNode.Raft.HardState())
+	// t.Logf("[DEBUG]rawNode.SoftState&Hardstate :%v %v", *rawNode.preSoftState, rawNode.preHardState)
+	// t.Logf("[DEBUG]NewNode.SoftState&Hardstate :%v %v", *rawNode.Raft.SoftState(), rawNode.Raft.HardState())
 	rawNode.Advance(rd)
-	t.Logf("[DEBUG]rawNode.SoftState&Hardstate :%v %v", *rawNode.preSoftState, rawNode.preHardState)
-	t.Logf("[DEBUG]NewNode.SoftState&Hardstate :%v %v", *rawNode.Raft.SoftState(), rawNode.Raft.HardState())
+	// t.Logf("[DEBUG]rawNode.SoftState&Hardstate :%v %v", *rawNode.preSoftState, rawNode.preHardState)
+	// t.Logf("[DEBUG]NewNode.SoftState&Hardstate :%v %v", *rawNode.Raft.SoftState(), rawNode.Raft.HardState())
 
 	if rawNode.HasReady() {
 		t.Errorf("unexpected Ready: %+v", rawNode.Ready())
