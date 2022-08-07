@@ -612,7 +612,7 @@ func (d *peerMsgHandler) onRaftMsg(msg *rspb.RaftMessage) error {
 		d.Tag, msg.GetMessage().GetMsgType(), msg.GetFromPeer().GetId(), msg.GetToPeer().GetId())
 	if msg.GetMessage().GetMsgType() == eraftpb.MessageType_MsgAppend ||
 		msg.GetMessage().GetMsgType() == eraftpb.MessageType_MsgAppendResponse {
-		log.Infof("MsgAppend(Resp) : %v ", msg.GetMessage())
+		log.Infof("MsgAppend(Resp) : %v m.Index(%v) m.term(%v)", msg.GetMessage(), msg.Message.Index, msg.Message.Term)
 	}
 	if !d.validateRaftMessage(msg) {
 		return nil

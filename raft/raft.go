@@ -235,6 +235,12 @@ func (r *Raft) sendAppend(to uint64) bool {
 		// return false
 	}
 	prevLogIndex := r.Prs[to].Next - 1
+	if r.Prs[to].Next == 0 {
+		log.Info("[ERROR]")
+		for i := range r.Prs {
+			log.Infof("id(%v).Next==(%v)", i, r.Prs[i].Next)
+		}
+	}
 	prevLogTerm, err := r.RaftLog.Term(prevLogIndex)
 	if err != nil {
 		// index->log has been compact. send snapshot.
@@ -502,6 +508,9 @@ func (r *Raft) UpdateCommit() bool {
 		commits = append(commits, v.Match)
 	}
 	log.Infof("	+++[DEBUG] commits[]:%v", commits)
+	for i := range r.Prs {
+		log.Infof("Node(%v) Match(%v)", i, r.Prs[i].Match)
+	}
 	sortkeys.Uint64s(commits)
 	older := r.RaftLog.committed
 	maybeNewCommit := commits[int((cntAll-1)/2)]
@@ -747,9 +756,9 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	case pb.MessageType_MsgPropose:
 		r.AppendEntries(m.Entries...)
 		if len(r.RaftLog.entries) > 10 {
-			log.Infof("%v propose msg :%v lastIndex:%v last ten raftlog entries:%v", r.id, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[len(r.RaftLog.entries)-10:])
+			log.Infof("%v==%v propose msg :%v lastIndex:%v last ten raftlog entries:%v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[len(r.RaftLog.entries)-10:])
 		} else {
-			log.Infof("%v propose msg :%v lastIndex:%v all raftlog entries: %v", r.id, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[0:])
+			log.Infof("%v==%v propose msg :%v lastIndex:%v all raftlog entries: %v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[0:])
 		}
 		r.BcastAppend()
 	case pb.MessageType_MsgHup:
@@ -891,33 +900,33 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 			entries = append(entries, entry)
 		}
 	}
-	r.RaftLog.BaseAppendEntries(entries...)
+	// r.RaftLog.BaseAppendEntries(entries...)
 	log.Infof("[DEBUG+] %v", entries)
-	// if len(entries) != 0 {
-	// 	for i := range entries {
-	// 		entry := entries[i]
-	// 		idx, term := entry.Index, entry.Term
-	// 		if idx > r.RaftLog.LastIndex() {
-	// 			for j := range entries[i:] {
-	// 				r.RaftLog.entries = append(r.RaftLog.entries, *entries[j])
-	// 			}
-	// 			r.RaftLog.stabled = min(r.RaftLog.stabled, entries[0].Index-1)
-	// 			break
-	// 		}
-	// 		t, err := r.RaftLog.Term(idx)
-	// 		if err != nil {
-	// 			panic(err)
-	// 		}
-	// 		if t != term {
-	// 			r.RaftLog.entries = r.RaftLog.entries[:idx-r.RaftLog.FirstIndex]
-	// 			for j := range entries[i:] {
-	// 				r.RaftLog.entries = append(r.RaftLog.entries, *entries[j])
-	// 			}
-	// 			r.RaftLog.stabled = min(r.RaftLog.stabled, entries[0].Index-1)
-	// 			break
-	// 		}
-	// 	}
-	// }
+	if len(entries) != 0 {
+		for i := range entries {
+			entry := entries[i]
+			idx, term := entry.Index, entry.Term
+			if idx > r.RaftLog.LastIndex() {
+				for j := range entries[i:] {
+					r.RaftLog.entries = append(r.RaftLog.entries, *entries[j])
+				}
+				r.RaftLog.stabled = min(r.RaftLog.stabled, entries[0].Index-1)
+				break
+			}
+			t, err := r.RaftLog.Term(idx)
+			if err != nil {
+				panic(err)
+			}
+			if t != term {
+				r.RaftLog.entries = r.RaftLog.entries[:idx-r.RaftLog.FirstIndex]
+				for j := range entries[i:] {
+					r.RaftLog.entries = append(r.RaftLog.entries, *entries[j])
+				}
+				r.RaftLog.stabled = min(r.RaftLog.stabled, entries[0].Index-1)
+				break
+			}
+		}
+	}
 	msg.Index = r.RaftLog.LastIndex()
 	// MsgAppend: update r.RaftLog.committed
 	if r.RaftLog.committed < m.Commit {
@@ -1010,7 +1019,8 @@ func (r *Raft) handleSnapshot(m pb.Message) {
 		r.msgs = append(r.msgs, msg)
 		return
 	}
-	r.becomeFollower(m.Term, m.From)
+	// debuginfo
+	r.becomeFollower(max(m.Term, r.Term), m.From)
 	r.restoreSnapshot(snapshot)
 	msg.Index = r.RaftLog.LastIndex()
 	r.msgs = append(r.msgs, msg)
@@ -1022,7 +1032,10 @@ func (r *Raft) addNode(id uint64) {
 	if r.Prs[id] != nil {
 		return
 	}
-	r.Prs[id] = &Progress{}
+	r.Prs[id] = &Progress{
+		Match: 0,
+		Next:  1,
+	}
 	r.PendingConfIndex = None
 }
 
