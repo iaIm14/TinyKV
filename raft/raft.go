@@ -1030,7 +1030,8 @@ func (r *Raft) addNode(id uint64) {
 func (r *Raft) removeNode(id uint64) {
 	// Your Code Here (3A).
 	removeable := (r.Prs[id] != nil)
-	// r.id== id
+	// r.id== id can remove itself
+	// or delete the whole cluster
 	// removeable = removeable && (len(r.Prs) >= 1)
 	if removeable {
 		delete(r.Prs, id)
