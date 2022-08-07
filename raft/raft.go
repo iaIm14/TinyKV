@@ -674,7 +674,7 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	}
 }
 func (r *Raft) handleAppendResponse(m pb.Message) {
-	if m.Term != None && m.Term < r.Term {
+	if m.Term < r.Term {
 		return
 	}
 	if m.Reject {
@@ -817,6 +817,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	}
 	if m.Term != None && m.Term < r.Term {
 		// old leader send old Term's Entry to Append
+		// debug: maybe send back to leader ,(leader->follower->leader)
 		//debuginfo
 		msg.Reject = true
 		msg.Term = uint64(0)
@@ -985,7 +986,9 @@ func (r *Raft) restoreSnapshot(snapshot *pb.Snapshot) {
 	nodes := snapshot.Metadata.ConfState.GetNodes()
 	for i := range nodes {
 		peer := nodes[i]
-		r.Prs[peer] = &Progress{}
+		r.Prs[peer] = &Progress{
+			Next: 1,
+		}
 	}
 	r.RaftLog.pendingSnapshot = snapshot
 }

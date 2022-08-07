@@ -168,6 +168,12 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, req *raft_cmd
 	}
 	return wb
 }
+
+func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *eraftpb.ConfChange, wb *engine_util.WriteBatch) *engine_util.WriteBatch {
+
+	return wb
+}
+
 func (d *peerMsgHandler) process(entry *eraftpb.Entry, wb *engine_util.WriteBatch) *engine_util.WriteBatch {
 	// msg := &raft_cmdpb.RaftCmdRequest{}
 	// err := msg.Unmarshal(entry.Data)
@@ -184,8 +190,13 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, wb *engine_util.WriteBatc
 	// 	return wb
 	// }
 	if entry.EntryType == eraftpb.EntryType_EntryConfChange {
-		// cc := &eraftpb.ConfChange{}
-
+		cc := &eraftpb.ConfChange{}
+		err := cc.Unmarshal(entry.Data)
+		if err != nil {
+			panic(err)
+		}
+		wb = d.processConfChange(entry, cc, wb)
+		return wb
 	}
 	if entry.Data == nil {
 		return wb
