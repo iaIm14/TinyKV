@@ -128,31 +128,33 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 
 // getEntries return all Entry Index between [lo,ro)
 func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
-	lastIndex := l.LastIndex()
-	firstIndex, _ := l.storage.FirstIndex()
-	// note ro > lastIndex +1
-	if lo > lastIndex || ro > lastIndex+1 || lo == ro || lo < firstIndex {
-		return []pb.Entry{}
-	}
-	if len(l.entries) > 0 {
-		var ents []pb.Entry
-		if lo < l.FirstIndex {
-			entries, err := l.storage.Entries(lo, min(l.FirstIndex, ro))
-			if err != nil {
-				return nil
-			}
-			ents = entries
-			log.Infof("[ERROR] getEntries partly from storage: %v", ents)
-		}
-		if ro > l.FirstIndex {
-			ents = append(ents, l.entries[max(lo, l.FirstIndex)-l.FirstIndex:ro-l.FirstIndex]...)
-		}
-		return ents
-	} else {
-		ents, _ := l.storage.Entries(lo, ro)
-		log.Infof("[ERROR] getEntries all from storage: %v", ents)
-		return ents
-	}
+	return l.entries[lo-l.FirstIndex : ro-l.FirstIndex]
+	// lastIndex := l.LastIndex()
+	// // firstIndex, _ := l.storage.FirstIndex()
+	// firstIndex := l.FirstIndex
+	// // note ro > lastIndex +1
+	// if lo > lastIndex || ro > lastIndex+1 || lo == ro || lo < firstIndex {
+	// 	return []pb.Entry{}
+	// }
+	// if len(l.entries) > 0 {
+	// 	var ents []pb.Entry
+	// 	if lo < l.FirstIndex {
+	// 		entries, err := l.storage.Entries(lo, min(l.FirstIndex, ro))
+	// 		if err != nil {
+	// 			return nil
+	// 		}
+	// 		ents = entries
+	// 		log.Infof("[ERROR] getEntries partly from storage: %v", ents)
+	// 	}
+	// 	if ro > l.FirstIndex {
+	// 		ents = append(ents, l.entries[max(lo, l.FirstIndex)-l.FirstIndex:ro-l.FirstIndex]...)
+	// 	}
+	// 	return ents
+	// } else {
+	// 	ents, _ := l.storage.Entries(lo, ro)
+	// 	log.Infof("[ERROR] getEntries all from storage: %v", ents)
+	// 	return ents
+	// }
 }
 
 // LastIndex return the last index of the log entries
@@ -181,6 +183,7 @@ func (l *RaftLog) LastIndex() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	if len(l.entries) > 0 && i >= l.FirstIndex {
+		log.Infof("uint64(i)=(%v), firstIndex:%v", i, l.FirstIndex)
 		return l.entries[i-l.FirstIndex].Term, nil
 	}
 	term, err := l.storage.Term(i)
