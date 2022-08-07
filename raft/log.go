@@ -252,15 +252,3 @@ func (l *RaftLog) BaseAppendEntries(entries ...*pb.Entry) {
 		}
 	}
 }
-
-func (l *RaftLog) toSliceIndex(i uint64) int {
-	idx := int(i - l.FirstIndex)
-	if idx < 0 {
-		panic("toSliceIndex: index < 0")
-	}
-	return idx
-}
-
-func (l *RaftLog) toEntryIndex(i int) uint64 {
-	return uint64(i) + l.FirstIndex
-}
