@@ -780,7 +780,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 }
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A)
-	if r.id != None && r.Prs[r.id] == nil {
+	if r.id != None && r.Prs[r.id] == nil && m.MsgType == pb.MessageType_MsgTimeoutNow {
 		return nil
 	}
 	// log.Infof("[DEBUG] INTO Step1 Phase. message: %v", m)

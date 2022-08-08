@@ -6,17 +6,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// WriteBatch 提供给badger.DB 批量写操作 (.WriteToDB)
 type WriteBatch struct {
-	//type badger.Entry struct{
-	//	Key []byte
-	//	Value []byte
-	//	// Usermeta 其他元数据(使用者)
-	//	Usermeta byte
-	//	ExpireAt uint64 // 过期时间
-	//}
-	// entries 存储需要写操作的所有对象
-	// size entries数量
 	entries       []*badger.Entry
 	size          int
 	safePoint     int
