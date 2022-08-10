@@ -222,6 +222,7 @@ func (r *Raft) sendSnapshot(to uint64) bool {
 	}
 	r.msgs = append(r.msgs, msg)
 	// debuginfo bug1
+	// sendSnapshot succeed , avoid duplicate sendSnapshot before handleAppResp
 	r.Prs[to].Next = snapshot.Metadata.Index + 1
 	return true
 }
@@ -306,6 +307,9 @@ func (r *Raft) sendHeartbeat(to uint64) {
 // tickForElection Follower and Candidate tick handler
 func (r *Raft) tickForElection() {
 	// log.Info("tickForElection(). tick info: r.electionElapsed: %v ; r.electionRandomTimeout %v;r.electionTimeout %v;", r.electionElapsed, r.electionRandomTimeout, r.electionTimeout)
+	if r.Term == 0 && len(r.Prs) == 0 {
+		return
+	}
 	r.electionElapsed++
 	if r.electionRandomTimeout <= r.electionElapsed {
 		// log.Infof("[DEBUG]++++ tickForElection runs. send MsgHup")
@@ -359,6 +363,17 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.leadTransfereeElapsed = 0
 
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
+
+	if len(r.Prs) == 0 {
+		r.Prs[r.id] = &Progress{
+			Match: r.RaftLog.LastIndex(),
+			Next:  r.RaftLog.LastIndex() + 1,
+		}
+		r.Prs[lead] = &Progress{
+			Match: 0,
+			Next:  1,
+		}
+	}
 	// Your Code Here (2A).
 }
 
@@ -780,7 +795,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 }
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A)
-	if r.id != None && r.Prs[r.id] == nil && m.MsgType == pb.MessageType_MsgTimeoutNow {
+	if r.id != None && r.Prs[r.id] == nil && len(r.Prs) != 0 {
 		return nil
 	}
 	// log.Infof("[DEBUG] INTO Step1 Phase. message: %v", m)
