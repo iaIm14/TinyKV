@@ -92,7 +92,12 @@ type peer struct {
 	// Cache the peers information from other stores
 	// when sending raft messages to other peers, it's used to get the store id of target peer
 	// (Used in 3B conf change)
-	peerCache map[uint64]*metapb.Peer
+	peerCache   map[uint64]*metapb.Peer
+	coPeerCache []struct {
+		uint64
+		*metapb.Peer
+		bool
+	}
 	// Record the instants of peers being added into the configuration.
 	// Remove them after they are not pending any more.
 	// (Used in 3B conf change)
@@ -160,6 +165,28 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 	return p, nil
 }
 
+func (p *peer) insertCoPeerCache(peer *metapb.Peer) {
+	p.coPeerCache = append(p.coPeerCache, struct {
+		uint64
+		*metapb.Peer
+		bool
+	}{
+		peer.GetId(),
+		peer,
+		true,
+	})
+}
+func (p *peer) removeCoPeerCache(peerID uint64) {
+	p.coPeerCache = append(p.coPeerCache, struct {
+		uint64
+		*metapb.Peer
+		bool
+	}{
+		peerID,
+		nil,
+		false,
+	})
+}
 func (p *peer) insertPeerCache(peer *metapb.Peer) {
 	p.peerCache[peer.GetId()] = peer
 }
