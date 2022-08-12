@@ -15,7 +15,6 @@
 package raft
 
 import (
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -183,7 +182,7 @@ func (l *RaftLog) LastIndex() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	if len(l.entries) > 0 && i >= l.FirstIndex {
-		log.Infof("uint64(i)=(%v), firstIndex:%v", i, l.FirstIndex)
+		// log.Infof("uint64(i)=(%v), firstIndex:%v", i, l.FirstIndex)
 		return l.entries[i-l.FirstIndex].Term, nil
 	}
 	term, err := l.storage.Term(i)

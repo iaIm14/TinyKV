@@ -143,6 +143,7 @@ func (d *storeWorker) checkMsg(msg *rspb.RaftMessage) (bool, error) {
 		return true, nil
 	}
 	if fromEpoch.ConfVer == regionEpoch.ConfVer {
+		// debuginfo
 		return false, errors.Errorf("tombstone peer [epoch: %s] received an invalid message %s, ignore it",
 			regionEpoch, msgType)
 	}

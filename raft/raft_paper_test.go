@@ -754,14 +754,14 @@ func TestLeaderSyncFollowerLog2AB(t *testing.T) {
 		n.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
 		// The election occurs in the term after the one we loaded with
 		// lead's term and committed index setted up above.
-		log.Info("msg_hup finish.")
+		// log.Info("msg_hup finish.")
 		n.send(pb.Message{From: 3, To: 1, MsgType: pb.MessageType_MsgRequestVoteResponse, Term: term + 1})
-		log.Info("vote_response finish.")
+		// log.Info("vote_response finish.")
 		n.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
-		log.Info("msg_propose finish.")
+		// log.Info("msg_propose finish.")
 		if g := diffu(ltoa(lead.RaftLog), ltoa(follower.RaftLog)); g != "" {
 			t.Errorf("#%d: log diff:\n%s", i, g)
-			log.Infof("#%d: log diff:\n%s", i, g)
+			// log.Infof("#%d: log diff:\n%s", i, g)
 		}
 	}
 }

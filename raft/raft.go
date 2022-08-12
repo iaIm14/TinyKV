@@ -237,7 +237,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 	}
 	prevLogIndex := r.Prs[to].Next - 1
 	if r.Prs[to].Next == 0 {
-		log.Info("[ERROR]")
+		log.Info("[ERROR]Prs[To].Next=0")
 		for i := range r.Prs {
 			log.Infof("id(%v).Next==(%v)", i, r.Prs[i].Next)
 		}
@@ -246,7 +246,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 	if err != nil {
 		// index->log has been compact. send snapshot.
 		if err == ErrCompacted {
-			log.Info("[DEBUG] send snapshot because leader compact raftlog ")
+			// log.Info("[DEBUG] send snapshot because leader compact raftlog ")
 			return r.sendSnapshot(to)
 		}
 		// log.Infof("[ERROR] can't find prevLogIndex(%v) in r.raftlog , Should update to send Snapshot", prevLogIndex)
@@ -281,10 +281,10 @@ func (r *Raft) sendAppend(to uint64) bool {
 	}
 	// log.Infof("	[DEBUG] Append Entries Msg:%v", msg)
 	if len(msg.Entries) != 0 {
-		log.Infof("DEBUG: %v==%v sendAppend to %v entries:%v", r.id, r.Lead, msg.To, msg.Entries)
+		// log.Infof("DEBUG: %v==%v sendAppend to %v entries:%v", r.id, r.Lead, msg.To, msg.Entries)
 		r.msgs = append(r.msgs, msg)
 	} else {
-		log.Infof("DEBUG: %v==%v send emptyAppend to %v ,to update commit: %v", r.id, r.Lead, msg.To, msg.Commit)
+		// log.Infof("DEBUG: %v==%v send emptyAppend to %v ,to update commit: %v", r.id, r.Lead, msg.To, msg.Commit)
 		r.msgs = append(r.msgs, msg)
 	}
 	return true
@@ -404,7 +404,7 @@ func (r *Raft) becomeLeader() {
 	// NOTE: Leader should propose a noop entry on its term
 	// debug Leader->leader no operation?
 	if r.State == StateLeader {
-		log.Info("[ERROR] leader jump into becomeLeader.")
+		// log.Info("[ERROR] leader jump into becomeLeader.")
 		return
 	}
 	r.State = StateLeader
@@ -490,7 +490,7 @@ func (r *Raft) AppendEntries(entries ...*pb.Entry) {
 		v.Term = r.Term
 		if v.EntryType == pb.EntryType_EntryConfChange {
 			if r.PendingConfIndex != None {
-				log.Infof("[DEBUG] PendingConfIndex:%v r.raftlog.applied:%v, ent.index:%v", r.PendingConfIndex, r.RaftLog.applied, v.Index)
+				// log.Infof("[DEBUG] PendingConfIndex:%v r.raftlog.applied:%v, ent.index:%v", r.PendingConfIndex, r.RaftLog.applied, v.Index)
 				if r.PendingConfIndex > r.RaftLog.applied {
 					v.EntryType = pb.EntryType_EntryNormal
 					v.Data = make([]byte, 0)
@@ -522,10 +522,10 @@ func (r *Raft) UpdateCommit() bool {
 		cntAll++
 		commits = append(commits, v.Match)
 	}
-	log.Infof("	+++[DEBUG] commits[]:%v", commits)
-	for i := range r.Prs {
-		log.Infof("Node(%v) Match(%v)", i, r.Prs[i].Match)
-	}
+	// log.Infof("	+++[DEBUG] commits[]:%v", commits)
+	// for i := range r.Prs {
+	// 	log.Infof("Node(%v) Match(%v)", i, r.Prs[i].Match)
+	// }
 	sortkeys.Uint64s(commits)
 	older := r.RaftLog.committed
 	maybeNewCommit := commits[int((cntAll-1)/2)]
@@ -546,7 +546,7 @@ func (r *Raft) UpdateCommit() bool {
 				return false
 			} else {
 				r.RaftLog.committed = max(r.RaftLog.committed, maybeNewCommit)
-				log.Infof("	---[DEBUG] update r.raftlog.committed into : %v", r.RaftLog.committed)
+				// log.Infof("	---[DEBUG] update r.raftlog.committed into : %v", r.RaftLog.committed)
 				return true
 			}
 		}
@@ -623,13 +623,13 @@ func (r *Raft) StepFollower(m pb.Message) error {
 	case pb.MessageType_MsgHeartbeat:
 		r.handleHeartbeat(m)
 	case pb.MessageType_MsgRequestVoteResponse:
-		log.Infof("[ERROR] Follower receive MsgRequestVoteResponse from %v", m.From)
+		// log.Infof("[ERROR] Follower receive MsgRequestVoteResponse from %v", m.From)
 	case pb.MessageType_MsgTimeoutNow:
-		log.Info("[DEBUG] MessageType_MsgTimeoutNow occur.")
-		log.Infof("%v receive MessageType_MsgTimeoutNow from %v", r.id, m.From)
+		// log.Info("[DEBUG] MessageType_MsgTimeoutNow occur.")
+		// log.Infof("%v receive MessageType_MsgTimeoutNow from %v", r.id, m.From)
 		r.raiseElection()
 	case pb.MessageType_MsgTransferLeader:
-		log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
+		// log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
 		if r.Lead == None {
 			return nil
 		}
@@ -656,7 +656,7 @@ func (r *Raft) StepCandidate(m pb.Message) error {
 	case pb.MessageType_MsgHeartbeat:
 		r.handleHeartbeat(m)
 	case pb.MessageType_MsgTransferLeader:
-		log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
+		// log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
 		if r.Lead == None {
 			return nil
 		}
@@ -665,7 +665,7 @@ func (r *Raft) StepCandidate(m pb.Message) error {
 	case pb.MessageType_MsgRequestVoteResponse:
 		r.handleRequestVoteResponse(m)
 	case pb.MessageType_MsgTimeoutNow:
-		log.Info("[ERROR] MessageType_MsgTimeoutNow occur.")
+		// log.Info("[ERROR] MessageType_MsgTimeoutNow occur.")
 	default:
 	}
 	return nil
@@ -674,11 +674,11 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	if m.Term > r.Term {
 		// debug m.From
 		r.becomeFollower(m.Term, m.From)
-		log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
+		// log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
 	} else {
 		//debugnote
 		if r.Prs[m.From].Match < r.RaftLog.LastIndex() {
-			log.Infof("Follower %v 's log is out-dated. match %v , leader(%v)'s lastindex=%v", m.From, r.Prs[m.From].Match, r.id, r.RaftLog.LastIndex())
+			// log.Infof("Follower %v 's log is out-dated. match %v , leader(%v)'s lastindex=%v", m.From, r.Prs[m.From].Match, r.id, r.RaftLog.LastIndex())
 			// r.Prs[m.From].Match = min(r.Prs[m.From].Match, m.Commit)
 			// r.Prs[m.From].Next = r.Prs[m.From].Match + 1
 			r.sendAppend(m.From)
@@ -712,7 +712,7 @@ func (r *Raft) handleAppendResponse(m pb.Message) {
 		// log.Infof("[DEBUG] receive MsgAppendResp reject. send again from entries.Index:%v logterm: %v", r.Prs[m.From].Next, m.LogTerm)
 		r.sendAppend(m.From)
 	} else {
-		log.Infof("leader(%v) index:%v match[%v]:%v", r.id, m.Index, m.From, r.Prs[m.From].Match)
+		// log.Infof("leader(%v) index:%v match[%v]:%v", r.id, m.Index, m.From, r.Prs[m.From].Match)
 		if m.Index > r.Prs[m.From].Match {
 			// filter
 			r.Prs[m.From].Next = m.Index + 1
@@ -770,14 +770,14 @@ func (r *Raft) StepLeader(m pb.Message) error {
 		r.handleHeartbeatResponse(m)
 	case pb.MessageType_MsgPropose:
 		r.AppendEntries(m.Entries...)
-		if len(r.RaftLog.entries) > 10 {
-			log.Infof("%v==%v propose msg :%v lastIndex:%v last ten raftlog entries:%v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[len(r.RaftLog.entries)-10:])
-		} else {
-			log.Infof("%v==%v propose msg :%v lastIndex:%v all raftlog entries: %v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[0:])
-		}
+		// if len(r.RaftLog.entries) > 10 {
+		// log.Infof("%v==%v propose msg :%v lastIndex:%v last ten raftlog entries:%v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[len(r.RaftLog.entries)-10:])
+		// } else {
+		// log.Infof("%v==%v propose msg :%v lastIndex:%v all raftlog entries: %v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[0:])
+		// }
 		r.BcastAppend()
 	case pb.MessageType_MsgHup:
-		log.Info("[ERROR] Leader receive local MsgHup")
+		// log.Info("[ERROR] Leader receive local MsgHup")
 	case pb.MessageType_MsgRequestVote:
 		r.handleRequestVote(m)
 	case pb.MessageType_MsgTransferLeader:
@@ -787,7 +787,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	case pb.MessageType_MsgAppendResponse:
 		r.handleAppendResponse(m)
 	case pb.MessageType_MsgSnapshot:
-		log.Info("[ERROR] leader receive MessageType_MsgSnapshot.")
+		// log.Info("[ERROR] leader receive MessageType_MsgSnapshot.")
 		r.handleSnapshot(m)
 	default:
 	}
@@ -803,7 +803,7 @@ func (r *Raft) Step(m pb.Message) error {
 	case m.Term == 0:
 		// local message
 	case m.Term > r.Term:
-		log.Infof("%v become Follower because Term diff: m & r.Term: %v %v", r.id, m.Term, r.Term)
+		// log.Infof("%v become Follower because Term diff: m & r.Term: %v %v", r.id, m.Term, r.Term)
 		//debugnote: no valid leader
 		r.becomeFollower(m.Term, None)
 	}
@@ -845,11 +845,11 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		msg.Index = r.RaftLog.LastIndex() + 1
 		msg.LogTerm = None
 		r.msgs = append(r.msgs, msg)
-		if 0 > len(r.RaftLog.entries)-10 {
-			log.Infof("DEBUG1: %v AppendEntries: %v", r.id, r.RaftLog.entries[0:])
-		} else {
-			log.Infof("DEBUG1: %v last ten AppendEntries: %v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):])
-		}
+		// if 0 > len(r.RaftLog.entries)-10 {
+		// 	log.Infof("DEBUG1: %v AppendEntries: %v", r.id, r.RaftLog.entries[0:])
+		// } else {
+		// 	log.Infof("DEBUG1: %v last ten AppendEntries: %v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):])
+		// }
 		return
 	}
 	// situation: m.Term>r.Term
@@ -865,7 +865,6 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	if m.Index >= r.RaftLog.FirstIndex {
 		// log.Infof("[DEBUG]+++ %v %v", m.Index, r.RaftLog.FirstIndex)
 		t, err := r.RaftLog.Term(m.Index)
-
 		if err != nil {
 			log.Info("[ERROR] return err!=nil .Term() should not hapend")
 			msg.Reject = true
@@ -883,11 +882,11 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 			}
 			msg.LogTerm, msg.Index = retLogTerm, retLogIndex
 			r.msgs = append(r.msgs, msg)
-			if 0 > len(r.RaftLog.entries)-10 {
-				log.Infof("DEBUG2: %v AppendEntries: %v", r.id, r.RaftLog.entries[0:])
-			} else {
-				log.Infof("DEBUG2: %v last ten AppendEntries: %v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):])
-			}
+			// if 0 > len(r.RaftLog.entries)-10 {
+			// 	log.Infof("DEBUG2: %v AppendEntries: %v", r.id, r.RaftLog.entries[0:])
+			// } else {
+			// 	log.Infof("DEBUG2: %v last ten AppendEntries: %v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):])
+			// }
 			return
 		}
 	}
@@ -917,7 +916,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		}
 	}
 	// r.RaftLog.BaseAppendEntries(entries...)
-	log.Infof("[DEBUG+] %v", entries)
+	// log.Infof("[DEBUG+] %v", entries)
 	if len(entries) != 0 {
 		for i := range entries {
 			entry := entries[i]
@@ -950,11 +949,11 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		r.RaftLog.committed = min(m.Commit, lastNewIndex)
 	}
 	r.msgs = append(r.msgs, msg)
-	if 0 > len(r.RaftLog.entries)-10 {
-		log.Infof("DEBUG3: %v AppendEntries: %v m.index=%v", r.id, r.RaftLog.entries[0:], m.Index)
-	} else {
-		log.Infof("DEBUG3: %v last ten AppendEntries: %v, m.index=%v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):], m.Index)
-	}
+	// if 0 > len(r.RaftLog.entries)-10 {
+	// 	log.Infof("DEBUG3: %v AppendEntries: %v m.index=%v", r.id, r.RaftLog.entries[0:], m.Index)
+	// } else {
+	// 	log.Infof("DEBUG3: %v last ten AppendEntries: %v, m.index=%v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):], m.Index)
+	// }
 }
 
 // handleHeartbeat handle Heartbeat RPC request

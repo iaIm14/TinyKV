@@ -93,7 +93,7 @@ func (rn *RawNode) Tick() {
 
 // Campaign causes this RawNode to transition to candidate state.
 func (rn *RawNode) Campaign() error {
-	// log.Infof("[DEBUG]++rawNode Campaign call step ")
+	log.Infof("[DEBUG]Campaign call step ,RawNode.RaftID:%v", rn.Raft.id)
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgHup,
 	})
