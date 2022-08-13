@@ -204,6 +204,13 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 		},
 		Peers: newPeers,
 	}
+	duplicateRegion := &metapb.Region{
+		Id:          d.regionId,
+		EndKey:      newRegion.EndKey,
+		StartKey:    d.Region().StartKey,
+		RegionEpoch: d.Region().RegionEpoch,
+		Peers:       d.Region().Peers,
+	}
 	newPeer, err := createPeer(d.ctx.store.Id, d.ctx.cfg, d.ctx.regionTaskSender, d.ctx.engine, newRegion)
 	if err != nil {
 		panic(err)
@@ -215,10 +222,13 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 	storeMeta := d.ctx.storeMeta
 	storeMeta.Lock()
 	defer storeMeta.Unlock()
+	d.peerStorage.clearExtraData(duplicateRegion)
 	storeMeta.regionRanges.Delete(&regionItem{region: region})
 	region.RegionEpoch.Version++
 	region.EndKey = split.SplitKey
-
+	// d.ctx.engine.Kv.Update(func(txn *badger.Txn) error {
+	// 	txn.SetWithMeta()
+	// })
 	storeMeta.setRegion(region, d.peer)
 	storeMeta.setRegion(newRegion, newPeer)
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: region})
