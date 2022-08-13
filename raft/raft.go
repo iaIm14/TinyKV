@@ -141,7 +141,6 @@ type Raft struct {
 	// baseline of election interval
 	electionTimeout       int
 	electionRandomTimeout int
-	leaderAliveTimeout    int
 	leaderAliveElapased   int
 	// number of ticks since it reached last heartbeatTimeout.
 	// only leader keeps heartbeatElapsed.
@@ -329,8 +328,8 @@ func (r *Raft) tickForElection() {
 
 func (r *Raft) tickLeaderAlive() {
 	r.leaderAliveElapased++
-	cnt := 0
 	if r.leaderAliveElapased >= r.electionTimeout*2 {
+		cnt := 0
 		r.leaderAliveElapased = 0
 		for i := range r.Prs {
 			ts := time.Now().Unix() - r.Prs[i].lastCommunicateTs
@@ -338,10 +337,10 @@ func (r *Raft) tickLeaderAlive() {
 				cnt++
 			}
 		}
-	}
-	if cnt*2 < len(r.Prs) {
-		// AliveCheck NotPass
-		r.becomeFollower(r.Term, None)
+		if cnt*2 < len(r.Prs) {
+			// AliveCheck NotPass
+			r.becomeFollower(r.Term, None)
+		}
 	}
 }
 
@@ -386,7 +385,6 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.leadTransfereeElapsed = 0
 
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
-	r.leaderAliveTimeout = 2 * r.electionTimeout
 
 	if len(r.Prs) == 0 {
 		r.Prs[r.id] = &Progress{
