@@ -74,7 +74,6 @@ func (wb *WriteBatch) RollbackToSafePoint() {
 	wb.size = wb.safePointSize
 }
 
-// WriteToDB 遍历整个WriteBatch 将其操作全部执行到badger.DB 中，db使用update方法注册一个新的事务，执行对应操作
 func (wb *WriteBatch) WriteToDB(db *badger.DB) error {
 	if len(wb.entries) > 0 {
 		err := db.Update(func(txn *badger.Txn) error {
@@ -98,7 +97,6 @@ func (wb *WriteBatch) WriteToDB(db *badger.DB) error {
 	return nil
 }
 
-// MustWriteToDB 保证了使用WriteBatch整个事务 必须要等待事务返回成功执行的时候才返回，否则抛出异常。
 func (wb *WriteBatch) MustWriteToDB(db *badger.DB) {
 	err := wb.WriteToDB(db)
 	if err != nil {
@@ -106,7 +104,6 @@ func (wb *WriteBatch) MustWriteToDB(db *badger.DB) {
 	}
 }
 
-// Reset 重置整个WriteBatch struct
 func (wb *WriteBatch) Reset() {
 	wb.entries = wb.entries[:0]
 	wb.size = 0
