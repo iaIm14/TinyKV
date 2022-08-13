@@ -98,7 +98,7 @@ func (l *RaftLog) maybeCompact() {
 	// RaftLog.entries contains [maybeFirstIndex==latest Snapshot's lastindex+1,lastindex]
 	if firstIndex > l.FirstIndex {
 		if len(l.entries) != 0 {
-			entries := l.getEntries(firstIndex, l.LastIndex()+1)
+			entries := l.entries[firstIndex-l.FirstIndex:]
 			l.entries = entries
 		}
 		l.FirstIndex = firstIndex
@@ -112,7 +112,7 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 		// log.Info("[ERROR] l.stabled >=l.lastIndex")
 		return []pb.Entry{}
 	}
-	return l.getEntries(l.stabled+1, l.LastIndex()+1)
+	return l.entries[l.stabled+1-l.FirstIndex:]
 }
 
 // nextEnts returns all the committed but not applied entries
