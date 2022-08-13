@@ -16,6 +16,7 @@ import (
 	"github.com/pingcap-incubator/tinykv/proto/pkg/metapb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
+	"github.com/pingcap-incubator/tinykv/raft"
 	"github.com/pingcap-incubator/tinykv/scheduler/pkg/btree"
 	"github.com/pingcap/errors"
 )
@@ -223,12 +224,41 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 	storeMeta.Lock()
 	defer storeMeta.Unlock()
 	d.peerStorage.clearExtraData(duplicateRegion)
+	//
+	d.peerStorage.snapState.StateType = snap.SnapState_Applying
 	storeMeta.regionRanges.Delete(&regionItem{region: region})
 	region.RegionEpoch.Version++
 	region.EndKey = split.SplitKey
-	// d.ctx.engine.Kv.Update(func(txn *badger.Txn) error {
-	// 	txn.SetWithMeta()
-	// })
+
+	snapshot := make(chan *eraftpb.Snapshot)
+	d.peerStorage.regionSched <- &runner.RegionTaskGen{
+		RegionId: d.regionId,
+		Notifier: snapshot,
+	}
+	if snapShot := <-snapshot; !raft.IsEmptySnap(snapShot) {
+		d.peerStorage.applyState.TruncatedState.Index = snapShot.Metadata.Index
+		d.peerStorage.applyState.TruncatedState.Term = snapShot.Metadata.Term
+		d.peerStorage.applyState.AppliedIndex = snapShot.Metadata.Index
+		d.peerStorage.raftState.LastIndex = snapShot.Metadata.Index
+		d.peerStorage.raftState.LastTerm = snapShot.Metadata.Term
+		status := make(chan bool)
+		d.peerStorage.regionSched <- &runner.RegionTaskApply{
+			RegionId: d.regionId,
+			SnapMeta: snapShot.Metadata,
+			StartKey: d.Region().StartKey,
+			EndKey:   d.Region().EndKey,
+			Notifier: status,
+		}
+		if ret := <-status; ret {
+			d.peerStorage.snapState.StateType = snap.SnapState_Relax
+			meta.WriteRegionState(wb, d.peerStorage.region, rspb.PeerState_Normal)
+		} else {
+			panic(err)
+		}
+	} else {
+		panic(err)
+	}
+
 	storeMeta.setRegion(region, d.peer)
 	storeMeta.setRegion(newRegion, newPeer)
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: region})
