@@ -16,7 +16,6 @@ import (
 	"github.com/pingcap-incubator/tinykv/proto/pkg/metapb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
-	"github.com/pingcap-incubator/tinykv/raft"
 	"github.com/pingcap-incubator/tinykv/scheduler/pkg/btree"
 	"github.com/pingcap/errors"
 )
@@ -201,17 +200,17 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 		EndKey:   region.EndKey,
 		RegionEpoch: &metapb.RegionEpoch{
 			ConfVer: InitEpochConfVer,
-			Version: region.RegionEpoch.Version + 1,
+			Version: InitEpochConfVer,
 		},
 		Peers: newPeers,
 	}
-	duplicateRegion := &metapb.Region{
-		Id:          d.regionId,
-		EndKey:      newRegion.EndKey,
-		StartKey:    d.Region().StartKey,
-		RegionEpoch: d.Region().RegionEpoch,
-		Peers:       d.Region().Peers,
-	}
+	// duplicateRegion := &metapb.Region{
+	// 	Id:          d.regionId,
+	// 	EndKey:      newRegion.EndKey,
+	// 	StartKey:    d.Region().StartKey,
+	// 	RegionEpoch: d.Region().RegionEpoch,
+	// 	Peers:       d.Region().Peers,
+	// }
 	newPeer, err := createPeer(d.ctx.store.Id, d.ctx.cfg, d.ctx.regionTaskSender, d.ctx.engine, newRegion)
 	if err != nil {
 		panic(err)
@@ -223,41 +222,10 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 	storeMeta := d.ctx.storeMeta
 	storeMeta.Lock()
 	defer storeMeta.Unlock()
-	d.peerStorage.clearExtraData(duplicateRegion)
-	//
-	d.peerStorage.snapState.StateType = snap.SnapState_Applying
+	// d.peerStorage.clearExtraData(duplicateRegion)
 	storeMeta.regionRanges.Delete(&regionItem{region: region})
 	region.RegionEpoch.Version++
 	region.EndKey = split.SplitKey
-
-	snapshot := make(chan *eraftpb.Snapshot)
-	d.peerStorage.regionSched <- &runner.RegionTaskGen{
-		RegionId: d.regionId,
-		Notifier: snapshot,
-	}
-	if snapShot := <-snapshot; !raft.IsEmptySnap(snapShot) {
-		d.peerStorage.applyState.TruncatedState.Index = snapShot.Metadata.Index
-		d.peerStorage.applyState.TruncatedState.Term = snapShot.Metadata.Term
-		d.peerStorage.applyState.AppliedIndex = snapShot.Metadata.Index
-		d.peerStorage.raftState.LastIndex = snapShot.Metadata.Index
-		d.peerStorage.raftState.LastTerm = snapShot.Metadata.Term
-		status := make(chan bool)
-		d.peerStorage.regionSched <- &runner.RegionTaskApply{
-			RegionId: d.regionId,
-			SnapMeta: snapShot.Metadata,
-			StartKey: d.Region().StartKey,
-			EndKey:   d.Region().EndKey,
-			Notifier: status,
-		}
-		if ret := <-status; ret {
-			d.peerStorage.snapState.StateType = snap.SnapState_Relax
-			meta.WriteRegionState(wb, d.peerStorage.region, rspb.PeerState_Normal)
-		} else {
-			panic(err)
-		}
-	} else {
-		panic(err)
-	}
 
 	storeMeta.setRegion(region, d.peer)
 	storeMeta.setRegion(newRegion, newPeer)
@@ -275,7 +243,7 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 	if d.IsLeader() {
 		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		d.notifyHeartbeatScheduler(newRegion, newPeer)
-		newPeer.MaybeCampaign(true)
+		// newPeer.MaybeCampaign(true)
 	}
 
 	d.handleProposal(entry, func(p *proposal) {
