@@ -166,13 +166,14 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmd
 		// _ = msg.Unmarshal(cc.Context)
 		wb = d.processConfChange(entry, cc, wb)
 	case raft_cmdpb.AdminCmdType_Split:
-		d.processSplit(entry, req, wb)
+		d.processSplit(entry, msg, wb)
 	case raft_cmdpb.AdminCmdType_TransferLeader:
 	}
 	return wb
 }
 
-func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.AdminRequest, wb *engine_util.WriteBatch) *engine_util.WriteBatch {
+func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.RaftCmdRequest, wb *engine_util.WriteBatch) *engine_util.WriteBatch {
+	req := msg.AdminRequest
 	split := req.Split
 	region := d.Region()
 	err := util.CheckKeyInRegion(split.SplitKey, region)
@@ -204,13 +205,13 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 		},
 		Peers: newPeers,
 	}
-	// duplicateRegion := &metapb.Region{
-	// 	Id:          d.regionId,
-	// 	EndKey:      newRegion.EndKey,
-	// 	StartKey:    d.Region().StartKey,
-	// 	RegionEpoch: d.Region().RegionEpoch,
-	// 	Peers:       d.Region().Peers,
-	// }
+	duplicateRegion := &metapb.Region{
+		Id:          d.regionId,
+		EndKey:      newRegion.EndKey,
+		StartKey:    d.Region().StartKey,
+		RegionEpoch: d.Region().RegionEpoch,
+		Peers:       d.Region().Peers,
+	}
 	newPeer, err := createPeer(d.ctx.store.Id, d.ctx.cfg, d.ctx.regionTaskSender, d.ctx.engine, newRegion)
 	if err != nil {
 		panic(err)
@@ -222,7 +223,8 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 	storeMeta := d.ctx.storeMeta
 	storeMeta.Lock()
 	defer storeMeta.Unlock()
-	// d.peerStorage.clearExtraData(duplicateRegion)
+	d.peerStorage.clearExtraData(duplicateRegion)
+	//
 	storeMeta.regionRanges.Delete(&regionItem{region: region})
 	region.RegionEpoch.Version++
 	region.EndKey = split.SplitKey
@@ -242,9 +244,9 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, req *raft_cmdpb.Admi
 	d.ApproximateSize = nil
 	if d.IsLeader() {
 		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
-		d.notifyHeartbeatScheduler(newRegion, newPeer)
-		// newPeer.MaybeCampaign(true)
+		newPeer.MaybeCampaign(true)
 	}
+	d.notifyHeartbeatScheduler(newRegion, newPeer)
 
 	d.handleProposal(entry, func(p *proposal) {
 		resp := &raft_cmdpb.RaftCmdResponse{
