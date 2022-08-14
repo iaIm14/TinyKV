@@ -17,7 +17,6 @@ package raft
 import (
 	"errors"
 	"math/rand"
-	"time"
 
 	"github.com/pingcap-incubator/tinykv/log"
 
@@ -108,8 +107,7 @@ func (c *Config) validate() error {
 // Progress represents a follower’s progress in the view of the leader. Leader maintains
 // progresses of all followers, and sends entries to the follower based on its progress.
 type Progress struct {
-	Match, Next       uint64
-	lastCommunicateTs int64
+	Match, Next uint64
 }
 
 type Raft struct {
@@ -141,7 +139,6 @@ type Raft struct {
 	// baseline of election interval
 	electionTimeout       int
 	electionRandomTimeout int
-	leaderAliveTimeout    int
 	leaderAliveElapased   int
 	// number of ticks since it reached last heartbeatTimeout.
 	// only leader keeps heartbeatElapsed.
@@ -152,7 +149,8 @@ type Raft struct {
 	electionElapsed int
 
 	leadTransfereeElapsed int
-
+	Communicate           map[uint64]int
+	// haveSendedSnapShot    map[uint64]int
 	// leadTransferee is id of the leader transfer target when its value is not zero.
 	// Follow the procedure defined in section 3.10 of Raft phd thesis.
 	// (https://web.stanford.edu/~ouster/cgi-bin/papers/OngaroPhD.pdf)
@@ -212,6 +210,10 @@ func newRaft(c *Config) *Raft {
 }
 
 func (r *Raft) sendSnapshot(to uint64) bool {
+	// _, pending := r.haveSendedSnapShot[to]
+	// if pending {
+	// return false
+	// }
 	snapshot, err := r.RaftLog.storage.Snapshot()
 	// firstIndex
 	if err != nil {
@@ -228,6 +230,7 @@ func (r *Raft) sendSnapshot(to uint64) bool {
 	// debuginfo bug1
 	// sendSnapshot succeed , avoid duplicate sendSnapshot before handleAppResp
 	r.Prs[to].Next = snapshot.Metadata.Index + 1
+	// r.haveSendedSnapShot[to] = 0
 	return true
 }
 
@@ -329,19 +332,18 @@ func (r *Raft) tickForElection() {
 
 func (r *Raft) tickLeaderAlive() {
 	r.leaderAliveElapased++
-	cnt := 0
-	if r.leaderAliveElapased >= r.electionTimeout*2 {
-		r.leaderAliveElapased = 0
-		for i := range r.Prs {
-			ts := time.Now().Unix() - r.Prs[i].lastCommunicateTs
-			if ts*9 < int64(r.electionTimeout)*10 {
-				cnt++
-			}
+	for i := range r.Communicate {
+		r.Communicate[i]++
+		if r.Communicate[i]*9 >= r.electionTimeout*10 {
+			delete(r.Communicate, i)
 		}
 	}
-	if cnt*2 < len(r.Prs) {
-		// AliveCheck NotPass
-		r.becomeFollower(r.Term, None)
+	if r.leaderAliveElapased >= r.electionTimeout*2 {
+		r.leaderAliveElapased = 0
+		if len(r.Communicate)*2 < len(r.Prs) {
+			// AliveCheck NotPass
+			r.becomeFollower(r.Term, None)
+		}
 	}
 }
 
@@ -358,8 +360,8 @@ func (r *Raft) tick() {
 				r.leadTransfereeElapsed = 0
 				r.leadTransferee = None
 			}
-			r.tickLeaderAlive()
 		}
+		r.tickLeaderAlive()
 		r.heartbeatElapsed++
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
 			r.heartbeatElapsed = 0
@@ -384,9 +386,10 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.electionElapsed = 0
 	r.leadTransferee = None
 	r.leadTransfereeElapsed = 0
+	// r.leaderAliveElapased = 0
+	r.leadTransfereeElapsed = 0
 
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
-	r.leaderAliveTimeout = 2 * r.electionTimeout
 
 	if len(r.Prs) == 0 {
 		r.Prs[r.id] = &Progress{
@@ -414,6 +417,9 @@ func (r *Raft) becomeCandidate() {
 	r.heartbeatElapsed = 0
 	r.leadTransferee = None
 	r.leadTransfereeElapsed = 0
+	// r.leaderAliveElapased = 0
+	r.leadTransfereeElapsed = 0
+	// r.haveSendedSnapShot = make(map[uint64]int)
 
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 	if len(r.Prs) <= 1 {
@@ -435,6 +441,9 @@ func (r *Raft) becomeLeader() {
 	r.Lead = r.id
 	r.electionElapsed = 0
 	r.heartbeatElapsed = 0 // easy left
+	// r.leaderAliveElapased = 0
+	// r.haveSendedSnapShot = make(map[uint64]int)
+	r.Communicate = make(map[uint64]int)
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 
 	//---------------
@@ -701,7 +710,7 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 		// log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
 	} else {
 		//debugnote
-		r.Prs[m.From].lastCommunicateTs = mx(r.Prs[m.From].lastCommunicateTs, time.Now().Unix())
+		r.Communicate[m.From] = 0
 		if r.Prs[m.From].Match < r.RaftLog.LastIndex() {
 			// log.Infof("Follower %v 's log is out-dated. match %v , leader(%v)'s lastindex=%v", m.From, r.Prs[m.From].Match, r.id, r.RaftLog.LastIndex())
 			// r.Prs[m.From].Match = min(r.Prs[m.From].Match, m.Commit)
@@ -717,7 +726,8 @@ func (r *Raft) handleAppendResponse(m pb.Message) {
 	if m.Term < r.Term {
 		return
 	}
-	r.Prs[m.From].lastCommunicateTs = mx(r.Prs[m.From].lastCommunicateTs, time.Now().Unix())
+	r.Communicate[m.From] = 0
+	// delete(r.haveSendedSnapShot, m.From)
 	if m.Reject {
 		// log.Infof("[DEBUG] m.Index & r.prs[from].Next: %v %v", m.Index, r.Prs[m.From].Next)
 		// if m.Index == r.Prs[m.From].Next-1 {
