@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
+	"github.com/pingcap-incubator/tinykv/log"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 	"github.com/stretchr/testify/assert"
 )
@@ -368,7 +369,7 @@ func TestScanLimitZero4C(t *testing.T) {
 // TestScanAll4C start at the beginning of the DB and read all pairs, respecting the timestamp.
 func TestScanAll4C(t *testing.T) {
 	builder := builderForScan(t)
-
+	log.Infof("{DEBUG} %v", builder.mem)
 	cmd := builder.scanRequest([]byte{0}, 10000)
 	resp := builder.runOneRequest(cmd).(*kvrpcpb.ScanResponse)
 
@@ -386,7 +387,7 @@ func TestScanLimit4C(t *testing.T) {
 
 	cmd := builder.scanRequest([]byte{2}, 6)
 	resp := builder.runOneRequest(cmd).(*kvrpcpb.ScanResponse)
-
+	log.Infof("[DEBUG] %v ", resp.Pairs)
 	assert.Nil(t, resp.RegionError)
 	assert.Equal(t, 6, len(resp.Pairs))
 	assert.Equal(t, []byte{3}, resp.Pairs[0].Key)
