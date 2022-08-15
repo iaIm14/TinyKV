@@ -5,6 +5,7 @@ import (
 
 	"github.com/pingcap-incubator/tinykv/kv/transaction/mvcc"
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
+	"github.com/pingcap-incubator/tinykv/log"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 	"github.com/stretchr/testify/assert"
 )
@@ -518,11 +519,13 @@ func TestRecommitKey4B(t *testing.T) {
 func TestCommitConflictRollback4B(t *testing.T) {
 	builder := newBuilder(t)
 	cmd := builder.commitRequest([]byte{3})
+	log.Infof("[DEBUG]  %v", builder.ts())
 	builder.init([]kv{
 		{cf: engine_util.CfWrite, key: []byte{3}, ts: 110, value: []byte{3, 0, 0, 0, 0, 0, 0, 0, builder.ts()}},
 	})
 	resp := builder.runOneRequest(cmd).(*kvrpcpb.CommitResponse)
 
+	log.Infof("[DEBUG] %v ... %v... %v", resp, resp.Error, resp.RegionError)
 	assert.NotNil(t, resp.Error)
 	assert.Nil(t, resp.RegionError)
 	builder.assertLens(0, 0, 1)
