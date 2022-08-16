@@ -4,13 +4,14 @@ require (
 	github.com/BurntSushi/toml v1.0.0
 	github.com/Connor1996/badger v1.5.1-0.20200306031920-9bbcbd8ba570
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f
+	github.com/dgraph-io/ristretto v0.0.2 // indirect
 	github.com/docker/go-units v0.4.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.4
 	github.com/google/btree v1.0.0
 	github.com/juju/errors v0.0.0-20181118221551-089d3ea4e4d5
 	github.com/juju/testing v0.0.0-20200510222523-6c8c298c77a0 // indirect
-	github.com/mdempsky/gocode v0.0.0-20200405233807-4acdcbdea79d // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/onsi/ginkgo v1.12.1 // indirect
 	github.com/onsi/gomega v1.10.0 // indirect
 	github.com/opentracing/opentracing-go v1.0.2
@@ -23,16 +24,20 @@ require (
 	github.com/pingcap/tipb v0.0.0-20200212061130-c4d518eb1d60
 	github.com/pkg/errors v0.8.1
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
-	github.com/shirou/gopsutil v2.19.10+incompatible
+	github.com/rogpeppe/go-internal v1.8.1 // indirect
+	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/sirupsen/logrus v1.2.0
 	github.com/stretchr/testify v1.4.0
+	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/zap v1.14.0
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
-	golang.org/x/tools/gopls v0.9.1 // indirect
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
+	golang.org/x/tools v0.1.12-0.20220713141851-7464a5a40219 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/grpc v1.25.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	honnef.co/go/tools v0.3.2 // indirect
 )
 
 go 1.13
