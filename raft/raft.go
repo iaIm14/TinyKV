@@ -339,13 +339,8 @@ func (r *Raft) tickLeaderAlive() {
 		}
 	}
 	if r.leaderAliveElapased >= r.electionTimeout*2 {
-		cnt := 0
 		r.leaderAliveElapased = 0
 		if len(r.Communicate)*2 < len(r.Prs) {
-			// AliveCheck NotPass
-			r.becomeFollower(r.Term, None)
-		}
-		if cnt*2 < len(r.Prs) {
 			// AliveCheck NotPass
 			r.becomeFollower(r.Term, None)
 		}
