@@ -14,7 +14,6 @@ import (
 // communicate with other nodes and all data is stored locally.
 type StandAloneStorage struct {
 	Conf    *config.Config
-	Status  bool
 	engines *engine_util.Engines
 	// Your Data Here (1).
 }
@@ -24,31 +23,26 @@ func NewStandAloneStorage(conf *config.Config) *StandAloneStorage {
 		kvPath := path.Join(conf.DBPath, "KV")
 		raftPath := path.Join(conf.DBPath, "Raft")
 		ret := &StandAloneStorage{
-			Conf:   conf,
-			Status: false,
+			Conf: conf,
 			engines: engine_util.NewEngines(
 				engine_util.CreateDB(kvPath, false),
-				// badger.DB.Open(badger.DefaultOptions(conf.DBPath)),
-				engine_util.CreateDB(raftPath, true),
+				nil,
 				kvPath,
 				raftPath,
 			),
-			// debug
 		}
 		return ret
 	}
 	// Your Code Here (1).
-	return nil
+	return &StandAloneStorage{}
 }
 
 func (s *StandAloneStorage) Start() error {
 	//Your Code Here (1).
-	s.Status = true
 	return nil
 }
 func (s *StandAloneStorage) Stop() error {
 	// Your Code Here (1).
-	s.Status = false
 	return nil
 }
 
@@ -79,24 +73,21 @@ func NewStandAloneReader(txn *badger.Txn) *StandAloneReader {
 // Reader use badger.Txn only
 func (s *StandAloneStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader, error) {
 	// Your Code Here (1).
-	_ = ctx
-	// key:= left
 	txn := s.engines.Kv.NewTransaction(false)
 	return NewStandAloneReader(txn), nil
 	//return nil, nil
 }
 
 func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error {
-	_ = ctx
 	// Your Code Here (1).
+	wb := &engine_util.WriteBatch{}
 	for _, v := range batch {
 		switch v.Data.(type) {
 		case storage.Put:
-			engine_util.PutCF(s.engines.Kv, v.Cf(), v.Key(), v.Value())
+			wb.SetCF(v.Cf(), v.Key(), v.Value())
 		case storage.Delete:
-			engine_util.DeleteCF(s.engines.Kv, v.Cf(), v.Key())
+			wb.DeleteCF(v.Cf(), v.Key())
 		}
 	}
-	// txn.Discard() // debug
-	return nil
+	return s.engines.WriteKV(wb)
 }
