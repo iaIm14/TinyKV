@@ -420,11 +420,12 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	if err != nil {
 		return result, err
 	}
-	raftWB.MustWriteToDB(ps.Engines.Raft)
+	raftWB.WriteToDB(ps.Engines.Raft)
+	log.Info(ps.region, " add:", ps.Engines.Raft)
 	if err != nil {
 		return result, err
 	}
-	kvWB.MustWriteToDB(ps.Engines.Kv)
+	kvWB.WriteToDB(ps.Engines.Kv)
 	if err != nil {
 		return result, err
 	}

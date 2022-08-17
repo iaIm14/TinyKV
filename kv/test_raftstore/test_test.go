@@ -234,7 +234,7 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 		if unreliable || partitions {
 			// Allow the clients to perform some operations without interruption
 			time.Sleep(300 * time.Millisecond)
-			// go networkchaos(t, cluster, ch_partitioner, &done_partitioner, unreliable, partitions, electionTimeout)
+			go networkchaos(t, cluster, ch_partitioner, &done_partitioner, unreliable, partitions, electionTimeout)
 		}
 		if confchange {
 			// Allow the clients to perfrom some operations without interruption
@@ -545,25 +545,26 @@ func TestBasicConfChange3B(t *testing.T) {
 	cluster.MustTransferLeader(1, NewPeer(1, 1))
 	log.Info("MustTransferLeader finish")
 	cluster.MustRemovePeer(1, NewPeer(2, 2))
-	log.Info("remove 2 finish")
 	cluster.MustRemovePeer(1, NewPeer(3, 3))
 	cluster.MustRemovePeer(1, NewPeer(4, 4))
 	cluster.MustRemovePeer(1, NewPeer(5, 5))
+	log.Info("remove 2,3,4,5 finish")
 
 	// now region 1 only has peer: (1, 1)
 	cluster.MustPut([]byte("k1"), []byte("v1"))
-	log.Info("mustput finish")
 	MustGetNone(cluster.engines[2], []byte("k1"))
+	log.Info("MustGet None finish")
 
 	// add peer (2, 2) to region 1
 	cluster.MustAddPeer(1, NewPeer(2, 2))
-	log.Info("mustAdd(2,2) finish")
+	log.Info("DEBUG1")
 	cluster.MustPut([]byte("k2"), []byte("v2"))
+	log.Info("DEBUG2")
 	cluster.MustGet([]byte("k2"), []byte("v2"))
+	log.Info("DEBUG3")
 	MustGetEqual(cluster.engines[2], []byte("k1"), []byte("v1"))
 	MustGetEqual(cluster.engines[2], []byte("k2"), []byte("v2"))
 
-	log.Info("[Check finish]")
 	epoch := cluster.GetRegion([]byte("k1")).GetRegionEpoch()
 	assert.True(t, epoch.GetConfVer() > 1)
 
