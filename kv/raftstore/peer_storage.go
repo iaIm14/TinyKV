@@ -163,7 +163,7 @@ func (ps *PeerStorage) Snapshot() (eraftpb.Snapshot, error) {
 			return snapshot, raft.ErrSnapshotTemporarilyUnavailable
 		}
 		ps.snapState.StateType = snap.SnapState_Relax
-		log.Info("[DEBUG] receive snapshotGen")
+		// log.Info("[DEBUG] receive snapshotGen")
 		if snapshot.GetMetadata() != nil {
 			ps.snapTriedCnt = 0
 			if ps.validateSnap(&snapshot) {
@@ -181,7 +181,7 @@ func (ps *PeerStorage) Snapshot() (eraftpb.Snapshot, error) {
 	}
 
 	ps.snapTriedCnt++
-	log.Infof("%s requesting snapshot:try %v", ps.Tag, ps.snapTriedCnt)
+	// log.Infof("%s requesting snapshot:try %v", ps.Tag, ps.snapTriedCnt)
 
 	ch := make(chan *eraftpb.Snapshot, 1)
 	ps.snapState = snap.SnapState{
@@ -421,7 +421,7 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 		return result, err
 	}
 	raftWB.WriteToDB(ps.Engines.Raft)
-	log.Info(ps.region, " add:", ps.Engines.Raft)
+	// log.Info(ps.region, " add:", ps.Engines.Raft)
 	if err != nil {
 		return result, err
 	}

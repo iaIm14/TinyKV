@@ -155,8 +155,8 @@ func (d *storeWorker) onRaftMessage(msg *rspb.RaftMessage) error {
 	if err := d.ctx.router.send(regionID, message.Msg{Type: message.MsgTypeRaftMessage, Data: msg}); err == nil {
 		return nil
 	}
-	log.Infof("handle raft message. from_peer:%d, to_peer:%d, store:%d, region:%d, msg:%+v",
-		msg.FromPeer.Id, msg.ToPeer.Id, d.storeState.id, regionID, msg.Message)
+	// log.Infof("handle raft message. from_peer:%d, to_peer:%d, store:%d, region:%d, msg:%+v",
+	// msg.FromPeer.Id, msg.ToPeer.Id, d.storeState.id, regionID, msg.Message)
 	if msg.ToPeer.StoreId != d.ctx.store.Id {
 		log.Infof("store not match, ignore it. store_id:%d, to_store_id:%d, region_id:%d",
 			d.ctx.store.Id, msg.ToPeer.StoreId, regionID)
@@ -168,17 +168,17 @@ func (d *storeWorker) onRaftMessage(msg *rspb.RaftMessage) error {
 		return nil
 	}
 	if msg.IsTombstone {
-		log.Info("tombstone")
+		// log.Info("tombstone")
 		// Target tombstone peer doesn't exist, so ignore it.
 		return nil
 	}
 	ok, err := d.checkMsg(msg)
 	if err != nil {
-		log.Info("errCheckmsg:%v", err.Error())
+		// log.Info("errCheckmsg:%v", err.Error())
 		return err
 	}
 	if ok {
-		log.Info("ok")
+		// log.Info("ok")
 		return nil
 	}
 	created, err := d.maybeCreatePeer(regionID, msg)
@@ -188,7 +188,7 @@ func (d *storeWorker) onRaftMessage(msg *rspb.RaftMessage) error {
 	if !created {
 		return nil
 	}
-	log.Infof("router send from(%v) to(%v) ,in region==%v, msg_type:%v", msg.FromPeer, msg.ToPeer, msg.RegionId, msg.Message.MsgType.String())
+	// log.Infof("router send from(%v) to(%v) ,in region==%v, msg_type:%v", msg.FromPeer, msg.ToPeer, msg.RegionId, msg.Message.MsgType.String())
 	_ = d.ctx.router.send(regionID, message.Msg{Type: message.MsgTypeRaftMessage, Data: msg})
 	return nil
 }
@@ -221,7 +221,7 @@ func (d *storeWorker) maybeCreatePeer(regionID uint64, msg *rspb.RaftMessage) (b
 		}
 		return false, nil
 	}
-	log.Infof("{DEBUGDEBUG replicate peer: startKey:%v EndKey:%v epoch:%v from:%v to:%v}", msg.StartKey, msg.EndKey, msg.RegionEpoch, msg.FromPeer, msg.ToPeer)
+	// log.Infof("{DEBUGDEBUG replicate peer: startKey:%v EndKey:%v epoch:%v from:%v to:%v}", msg.StartKey, msg.EndKey, msg.RegionEpoch, msg.FromPeer, msg.ToPeer)
 	peer, err := replicatePeer(
 		d.ctx.store.Id, d.ctx.cfg, d.ctx.regionTaskSender, d.ctx.engine, regionID, msg.ToPeer)
 	if err != nil {

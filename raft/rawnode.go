@@ -93,7 +93,7 @@ func (rn *RawNode) Tick() {
 
 // Campaign causes this RawNode to transition to candidate state.
 func (rn *RawNode) Campaign() error {
-	log.Infof("[DEBUG]Campaign call step ,RawNode.RaftID:%v", rn.Raft.id)
+	// log.Infof("[DEBUG]Campaign call step ,RawNode.RaftID:%v", rn.Raft.id)
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgHup,
 	})
@@ -168,7 +168,7 @@ func (rn *RawNode) Ready() Ready {
 	rn.Raft.msgs = make([]pb.Message, 0)
 	if !IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot) {
 		ret.Snapshot = *rn.Raft.RaftLog.PendingSnapshot
-		log.Info("{DEBUGDEBUG} %v %v", rn.Raft.RaftLog.PendingSnapshot)
+		// log.Info("{DEBUGDEBUG} %v %v", rn.Raft.RaftLog.PendingSnapshot)
 		rn.Raft.RaftLog.PendingSnapshot = nil
 	}
 	return ret
@@ -178,7 +178,7 @@ func (rn *RawNode) Ready() Ready {
 func (rn *RawNode) HasReady() bool {
 	// Your Code Here (2A).
 	ret := len(rn.Raft.msgs) != 0 || len(rn.Raft.RaftLog.nextEnts()) != 0 || len(rn.Raft.RaftLog.unstableEntries()) != 0 ||
-		!isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) ||
+		(!isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState())) ||
 		// debuginfo:preSoftState changes in Ready() function
 		(!isHardStateEqual(rn.preHardState, rn.Raft.HardState()) && !IsEmptyHardState(rn.Raft.HardState())) ||
 		(!IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot))

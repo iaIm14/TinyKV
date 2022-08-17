@@ -38,7 +38,7 @@ func createPeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
 	if metaPeer == nil {
 		return nil, errors.Errorf("find no peer for store %d in region %v", storeID, region)
 	}
-	log.Infof("region %v create peer with ID %d,StartKey:%v,EndKey:%v", region, metaPeer.Id, region.StartKey, region.EndKey)
+	// log.Infof("region %v create peer with ID %d,StartKey:%v,EndKey:%v", region, metaPeer.Id, region.StartKey, region.EndKey)
 	return NewPeer(storeID, cfg, engines, region, sched, metaPeer)
 }
 
@@ -49,13 +49,13 @@ func replicatePeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
 	engines *engine_util.Engines, regionID uint64, metaPeer *metapb.Peer) (*peer, error) {
 	// We will remove tombstone key when apply snapshot
 	log.Infof("[region %v] replicates peer with ID %d", regionID, metaPeer.GetId())
-	raftstate, err := meta.GetRaftLocalState(engines.Raft, regionID)
-	if err != nil {
-		log.Info(err)
-		log.Info("RaftPoint:!!!", engines.Raft)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-	}
+	// raftstate, err := meta.GetRaftLocalState(engines.Raft, regionID)
+	// if err != nil {
+	// 	log.Info(err)
+	// 	log.Info("RaftPoint:!!!", engines.Raft)
+	// } else {
+	// 	log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
+	// }
 	region := &metapb.Region{
 		Id:          regionID,
 		RegionEpoch: &metapb.RegionEpoch{},
