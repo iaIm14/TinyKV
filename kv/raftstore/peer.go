@@ -83,11 +83,12 @@ type peer struct {
 
 	// Record the callback of the proposals
 	// (Used in 2B)
-	proposals []*proposal
-
+	proposals     []*proposal
+	readProposals []*proposal
 	// Index of last scheduled compacted raft log.
 	// (Used in 2C)
 	LastCompactedIdx uint64
+	LastAppliedIdx   uint64
 
 	// Cache the peers information from other stores
 	// when sending raft messages to other peers, it's used to get the store id of target peer
@@ -151,6 +152,7 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 		PeersStartPendingTime: make(map[uint64]time.Time),
 		Tag:                   tag,
 		ticker:                newTicker(region.GetId(), cfg),
+		LastAppliedIdx:        appliedIndex,
 	}
 
 	// If this region has only one peer and I am the one, campaign directly.
@@ -254,7 +256,11 @@ func (p *peer) Destroy(engine *engine_util.Engines, keepData bool) error {
 	for _, proposal := range p.proposals {
 		NotifyReqRegionRemoved(region.Id, proposal.cb)
 	}
+	for _, proposal := range p.readProposals {
+		NotifyReqRegionRemoved(region.Id, proposal.cb)
+	}
 	p.proposals = nil
+	p.readProposals = nil
 
 	log.Infof("%v destroy itself, takes %v", p.Tag, time.Now().Sub(start))
 	return nil

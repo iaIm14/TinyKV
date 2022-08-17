@@ -160,21 +160,15 @@ func (rn *RawNode) Ready() Ready {
 	newSoftState := rn.Raft.SoftState()
 	if !isSoftStateEqual(*newSoftState, *rn.preSoftState) {
 		ret.SoftState = newSoftState
-		// debuginfo
-		rn.preSoftState = newSoftState
 	}
 	newHardState := rn.Raft.HardState()
 	if !isHardStateEqual(newHardState, rn.preHardState) {
 		ret.HardState = newHardState
 	}
-	// if ret.SoftState != nil {
-	// 	rn.preSoftState = ret.SoftState
-	// }
 	rn.Raft.msgs = make([]pb.Message, 0)
-	//debuginfo
-	if !IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot) {
-		ret.Snapshot = *rn.Raft.RaftLog.pendingSnapshot
-		rn.Raft.RaftLog.pendingSnapshot = nil
+	if !IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot) {
+		ret.Snapshot = *rn.Raft.RaftLog.PendingSnapshot
+		rn.Raft.RaftLog.PendingSnapshot = nil
 	}
 	return ret
 }
@@ -183,10 +177,10 @@ func (rn *RawNode) Ready() Ready {
 func (rn *RawNode) HasReady() bool {
 	// Your Code Here (2A).
 	ret := len(rn.Raft.msgs) != 0 || len(rn.Raft.RaftLog.nextEnts()) != 0 || len(rn.Raft.RaftLog.unstableEntries()) != 0 ||
-		// !isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) ||
+		!isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) ||
 		// debuginfo:preSoftState changes in Ready() function
 		(!isHardStateEqual(rn.preHardState, rn.Raft.HardState()) && !IsEmptyHardState(rn.Raft.HardState())) ||
-		(!IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot))
+		(!IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot))
 	// if ret {
 	// log.Infof("[DEBUG]soft :%v %v", *rn.preSoftState, *rn.Raft.SoftState())
 	// log.Infof("[DEBUG]hard :%v %v", rn.preHardState, rn.Raft.HardState())
@@ -201,6 +195,12 @@ func (rn *RawNode) HasReady() bool {
 // last Ready results.
 func (rn *RawNode) Advance(rd Ready) {
 	// Your Code Here (2A).
+	// if !isSoftStateEqual(*rd.SoftState, *rn.preSoftState) {
+	// 	rn.preSoftState = rd.SoftState
+	// }
+	if rd.SoftState != nil {
+		rn.preSoftState = rd.SoftState
+	}
 	if !IsEmptyHardState(rd.HardState) {
 		rn.preHardState = rd.HardState
 	}

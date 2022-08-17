@@ -1,0 +1,31 @@
+2022/08/17 01:09:51.184390 peer_msg_handler.go:628: [info] [region 1] 2 on split with [48 32 48 48 48 48 48 48 49 49]
+2022/08/17 01:09:51.189414 test_test.go:224: [info] 0: client new scan [[0 00000000]-[0 00000017]]
+2022/08/17 01:09:51.191492 peer.go:41: [info] region id:6 start_key:"0 00000011" region_epoch:<conf_ver:1 version:1 > peers:<id:7 store_id:1 > peers:<id:8 store_id:2 > peers:<id:9 store_id:3 > peers:<id:10 store_id:4 > peers:<id:11 store_id:5 >  create peer with ID 8,StartKey:[48 32 48 48 48 48 48 48 49 49],EndKey:[]
+2022/08/17 01:09:51.193016 peer.go:41: [info] region id:6 start_key:"0 00000011" region_epoch:<conf_ver:1 version:1 > peers:<id:7 store_id:1 > peers:<id:8 store_id:2 > peers:<id:9 store_id:3 > peers:<id:10 store_id:4 > peers:<id:11 store_id:5 >  create peer with ID 7,StartKey:[48 32 48 48 48 48 48 48 49 49],EndKey:[]
+2022/08/17 01:09:51.193744 peer.go:41: [info] region id:6 start_key:"0 00000011" region_epoch:<conf_ver:1 version:1 > peers:<id:7 store_id:1 > peers:<id:8 store_id:2 > peers:<id:9 store_id:3 > peers:<id:10 store_id:4 > peers:<id:11 store_id:5 >  create peer with ID 9,StartKey:[48 32 48 48 48 48 48 48 49 49],EndKey:[]
+2022/08/17 01:09:51.193981 peer.go:41: [info] region id:6 start_key:"0 00000011" region_epoch:<conf_ver:1 version:1 > peers:<id:7 store_id:1 > peers:<id:8 store_id:2 > peers:<id:9 store_id:3 > peers:<id:10 store_id:4 > peers:<id:11 store_id:5 >  create peer with ID 10,StartKey:[48 32 48 48 48 48 48 48 49 49],EndKey:[]
+2022/08/17 01:09:51.194782 rawnode.go:96: [info] [DEBUG]Campaign call step ,RawNode.RaftID:8
+2022/08/17 01:09:51.198436 peer.go:41: [info] region id:6 start_key:"0 00000011" region_epoch:<conf_ver:1 version:1 > peers:<id:7 store_id:1 > peers:<id:8 store_id:2 > peers:<id:9 store_id:3 > peers:<id:10 store_id:4 > peers:<id:11 store_id:5 >  create peer with ID 11,StartKey:[48 32 48 48 48 48 48 48 49 49],EndKey:[]
+2022/08/17 01:09:51.489919 peer_msg_handler.go:1093: [info] [region 6] 7 starts destroy
+2022/08/17 01:09:51.490070 peer.go:233: [info] [region 6] 7 begin to destroy
+2022/08/17 01:09:51.490172 peer_storage.go:299: [info] [region 6] clear peer 1 meta key 1 apply key 1 raft key and 2 raft logs, takes 29.293µs
+2022/08/17 01:09:51.491063 peer_msg_handler.go:1005: [info] [region 6] raft message MsgAppendResponse is stale, current conf_ver:2 version:1  ignore it
+2022/08/17 01:09:51.491409 peer_msg_handler.go:1005: [info] [region 6] raft message MsgAppendResponse is stale, current conf_ver:2 version:1  ignore it
+2022/08/17 01:09:51.493812 peer.go:265: [info] [region 6] 7 destroy itself, takes 3.739119ms
+2022/08/17 01:09:51.495879 region_task.go:137: [info] succeed in deleting data in range. [regionId: 6, startKey: 30203030303030303131, endKey: ]
+2022/08/17 01:09:51.595224 peer_msg_handler.go:1093: [info] [region 1] 4 starts destroy
+2022/08/17 01:09:51.595684 peer.go:233: [info] [region 1] 4 begin to destroy
+2022/08/17 01:09:51.595962 peer_storage.go:299: [info] [region 1] clear peer 1 meta key 1 apply key 1 raft key and 39 raft logs, takes 62.228µs
+2022/08/17 01:09:51.595533 peer_msg_handler.go:1005: [info] [region 1] raft message MsgAppendResponse is stale, current conf_ver:2 version:2  ignore it
+2022/08/17 01:09:51.598161 peer.go:265: [info] [region 1] 4 destroy itself, takes 2.476283ms
+2022/08/17 01:09:51.600629 region_task.go:137: [info] succeed in deleting data in range. [regionId: 1, startKey: , endKey: 30203030303030303131]
+2022/08/17 01:09:51.688725 peer_msg_handler.go:1093: [info] [region 1] 1 starts destroy
+2022/08/17 01:09:51.688804 peer.go:233: [info] [region 1] 1 begin to destroy
+2022/08/17 01:09:51.688896 peer_storage.go:299: [info] [region 1] clear peer 1 meta key 1 apply key 1 raft key and 40 raft logs, takes 44.853µs
+2022/08/17 01:09:51.689237 peer_msg_handler.go:1005: [info] [region 1] raft message MsgAppendResponse is stale, current conf_ver:3 version:2  ignore it
+2022/08/17 01:09:51.690846 peer_msg_handler.go:1005: [info] [region 1] raft message MsgAppendResponse is stale, current conf_ver:3 version:2  ignore it
+2022/08/17 01:09:51.692819 peer.go:265: [info] [region 1] 1 destroy itself, takes 4.0117ms
+2022/08/17 01:09:51.694253 region_task.go:137: [info] succeed in deleting data in range. [regionId: 1, startKey: , endKey: 30203030303030303131]
+2022/08/17 01:09:51.935329 store_worker.go:158: [info] handle raft message. from_peer:2, to_peer:12, store:1, region:1, msg:msg_type:MsgHeartbeat to:12 from:2 term:6 
+2022/08/17 01:09:51.935454 store_worker.go:220: [info] {DEBUGDEBUG replicate peer: [] [48 32 48 48 48 48 48 48 49 49] conf_ver:4 version:2  from:id:2 store_id:2  to:id:12 store_id:1 }
+2022/08/17 01:09:51.935487 peer.go:51: [info] [region 1] replicates peer with ID 12
