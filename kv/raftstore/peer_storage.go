@@ -163,6 +163,7 @@ func (ps *PeerStorage) Snapshot() (eraftpb.Snapshot, error) {
 			return snapshot, raft.ErrSnapshotTemporarilyUnavailable
 		}
 		ps.snapState.StateType = snap.SnapState_Relax
+		log.Info("[DEBUG] receive snapshotGen")
 		if snapshot.GetMetadata() != nil {
 			ps.snapTriedCnt = 0
 			if ps.validateSnap(&snapshot) {
@@ -179,8 +180,9 @@ func (ps *PeerStorage) Snapshot() (eraftpb.Snapshot, error) {
 		return snapshot, err
 	}
 
-	log.Infof("%s requesting snapshot", ps.Tag)
 	ps.snapTriedCnt++
+	log.Infof("%s requesting snapshot:try %v", ps.Tag, ps.snapTriedCnt)
+
 	ch := make(chan *eraftpb.Snapshot, 1)
 	ps.snapState = snap.SnapState{
 		StateType: snap.SnapState_Generating,

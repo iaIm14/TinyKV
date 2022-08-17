@@ -253,7 +253,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 	if err != nil {
 		// index->log has been compact. send snapshot.
 		if err == ErrCompacted {
-			// log.Info("[DEBUG] send snapshot because leader compact raftlog ")
+			log.Info("[DEBUG] send snapshot because leader compact raftlog ")
 			return r.sendSnapshot(to)
 		}
 		// log.Infof("[ERROR] can't find prevLogIndex(%v) in r.raftlog , Should update to send Snapshot", prevLogIndex)
@@ -1040,7 +1040,7 @@ func (r *Raft) restoreSnapshot(snapshot *pb.Snapshot) {
 			Next: 1,
 		}
 	}
-	r.RaftLog.pendingSnapshot = snapshot
+	r.RaftLog.PendingSnapshot = snapshot
 }
 
 func (r *Raft) checkSnapshot(m pb.Message) bool {

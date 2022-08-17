@@ -49,7 +49,7 @@ type RaftLog struct {
 
 	// the incoming unstable snapshot, if any.
 	// (Used in 2C)
-	pendingSnapshot *pb.Snapshot
+	PendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
 	// first entry in Raftlog.entries 's Index ==FirstIndex
@@ -161,19 +161,19 @@ func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
 	// stale snapshot discarded. debuginfo
 	var index uint64
-	if !IsEmptySnap(l.pendingSnapshot) {
-		index = l.pendingSnapshot.Metadata.Index
+	if !IsEmptySnap(l.PendingSnapshot) {
+		index = l.PendingSnapshot.Metadata.Index
 	}
 	if len(l.entries) > 0 {
 		return max(l.entries[len(l.entries)-1].Index, index)
 	}
 	i, _ := l.storage.LastIndex()
 	return max(i, index)
-	// if len(l.entries) == 0 && IsEmptySnap(l.pendingSnapshot) {
+	// if len(l.entries) == 0 && IsEmptySnap(l.PendingSnapshot) {
 	// 	ret, _ := l.storage.LastIndex()
 	// 	return ret
-	// } else if len(l.entries) == 0 && !IsEmptySnap(l.pendingSnapshot) {
-	// 	return l.pendingSnapshot.Metadata.Index
+	// } else if len(l.entries) == 0 && !IsEmptySnap(l.PendingSnapshot) {
+	// 	return l.PendingSnapshot.Metadata.Index
 	// } else {
 	// 	return uint64(len(l.entries)) + l.FirstIndex - 1
 	// }
@@ -186,11 +186,11 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 		return l.entries[i-l.FirstIndex].Term, nil
 	}
 	term, err := l.storage.Term(i)
-	if err == ErrUnavailable && !IsEmptySnap(l.pendingSnapshot) {
-		if i == l.pendingSnapshot.Metadata.Index {
-			term = l.pendingSnapshot.Metadata.Term
+	if err == ErrUnavailable && !IsEmptySnap(l.PendingSnapshot) {
+		if i == l.PendingSnapshot.Metadata.Index {
+			term = l.PendingSnapshot.Metadata.Term
 			err = nil
-		} else if i < l.pendingSnapshot.Metadata.Index {
+		} else if i < l.PendingSnapshot.Metadata.Index {
 			err = ErrCompacted
 		}
 	}
@@ -204,10 +204,10 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// 	return l.entries[i-l.FirstIndex].Term, nil
 	// }
 	// ret, err := l.storage.Term(i)
-	// if err == ErrUnavailable && !IsEmptySnap(l.pendingSnapshot) {
-	// 	if i == l.pendingSnapshot.Metadata.Index {
-	// 		return l.pendingSnapshot.Metadata.Term, nil
-	// 	} else if i < l.pendingSnapshot.Metadata.Index {
+	// if err == ErrUnavailable && !IsEmptySnap(l.PendingSnapshot) {
+	// 	if i == l.PendingSnapshot.Metadata.Index {
+	// 		return l.PendingSnapshot.Metadata.Term, nil
+	// 	} else if i < l.PendingSnapshot.Metadata.Index {
 	// 		// log.Info("[DEBUG] return ErrCompacted")
 	// 		return ret, ErrCompacted
 	// 	} else {

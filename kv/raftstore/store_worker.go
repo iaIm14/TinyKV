@@ -155,16 +155,16 @@ func (d *storeWorker) onRaftMessage(msg *rspb.RaftMessage) error {
 	if err := d.ctx.router.send(regionID, message.Msg{Type: message.MsgTypeRaftMessage, Data: msg}); err == nil {
 		return nil
 	}
-	log.Debugf("handle raft message. from_peer:%d, to_peer:%d, store:%d, region:%d, msg:%+v",
+	log.Infof("handle raft message. from_peer:%d, to_peer:%d, store:%d, region:%d, msg:%+v",
 		msg.FromPeer.Id, msg.ToPeer.Id, d.storeState.id, regionID, msg.Message)
 	if msg.ToPeer.StoreId != d.ctx.store.Id {
-		log.Warnf("store not match, ignore it. store_id:%d, to_store_id:%d, region_id:%d",
+		log.Infof("store not match, ignore it. store_id:%d, to_store_id:%d, region_id:%d",
 			d.ctx.store.Id, msg.ToPeer.StoreId, regionID)
 		return nil
 	}
 
 	if msg.RegionEpoch == nil {
-		log.Errorf("missing region epoch in raft message, ignore it. region_id:%d", regionID)
+		log.Infof("missing region epoch in raft message, ignore it. region_id:%d", regionID)
 		return nil
 	}
 	if msg.IsTombstone {
@@ -217,7 +217,7 @@ func (d *storeWorker) maybeCreatePeer(regionID uint64, msg *rspb.RaftMessage) (b
 		}
 		return false, nil
 	}
-
+	log.Infof("{DEBUGDEBUG replicate peer: %v %v %v from:%v to:%v}", msg.StartKey, msg.EndKey, msg.RegionEpoch, msg.FromPeer, msg.ToPeer)
 	peer, err := replicatePeer(
 		d.ctx.store.Id, d.ctx.cfg, d.ctx.regionTaskSender, d.ctx.engine, regionID, msg.ToPeer)
 	if err != nil {
