@@ -9,7 +9,6 @@ import (
 	"github.com/pingcap-incubator/tinykv/kv/transaction/latches"
 	"github.com/pingcap-incubator/tinykv/kv/transaction/mvcc"
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
-	"github.com/pingcap-incubator/tinykv/log"
 	coppb "github.com/pingcap-incubator/tinykv/proto/pkg/coprocessor"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/tinykvpb"
@@ -174,7 +173,7 @@ func (server *Server) KvPrewrite(_ context.Context, req *kvrpcpb.PrewriteRequest
 func (server *Server) KvCommit(_ context.Context, req *kvrpcpb.CommitRequest) (*kvrpcpb.CommitResponse, error) {
 	// Your Code Here (4B).
 	// 110 nil [3] 100
-	log.Infof("[DEBUG]  %v %v %v %v", req.CommitVersion, req.Context, req.Keys, req.StartVersion)
+	// log.Infof("[DEBUG]  %v %v %v %v", req.CommitVersion, req.Context, req.Keys, req.StartVersion)
 	resp := &kvrpcpb.CommitResponse{}
 	if req.CommitVersion < req.StartVersion {
 		resp.Error = &kvrpcpb.KeyError{
@@ -207,11 +206,11 @@ func (server *Server) KvCommit(_ context.Context, req *kvrpcpb.CommitRequest) (*
 		}
 		if write != nil && write.Kind != mvcc.WriteKindRollback && commitTs == req.CommitVersion && req.StartVersion == write.StartTS {
 			// duplicate KvCommit
-			log.Infof("[duplicate] %v %v %v", commitTs, req.CommitVersion, req.StartVersion)
+			// log.Infof("[duplicate] %v %v %v", commitTs, req.CommitVersion, req.StartVersion)
 			return resp, nil
 		}
 		lock, err := txn.GetLock(key)
-		log.Infof("[GetLock Commit] %v %v %v", key, lock, err)
+		// log.Infof("[GetLock Commit] %v %v %v", key, lock, err)
 		if err != nil {
 			if errRegion, have := err.(*raft_storage.RegionError); have {
 				resp.RegionError = errRegion.RequestErr
@@ -231,7 +230,7 @@ func (server *Server) KvCommit(_ context.Context, req *kvrpcpb.CommitRequest) (*
 			}
 			return resp, nil
 		}
-		log.Infof("[GetLock] %v %v %v", lock.Kind, lock.Ts, lock.Primary)
+		// log.Infof("[GetLock] %v %v %v", lock.Kind, lock.Ts, lock.Primary)
 		txn.PutWrite(key, req.CommitVersion, &mvcc.Write{
 			StartTS: req.StartVersion,
 			Kind:    lock.Kind,
@@ -273,10 +272,10 @@ func (server *Server) KvScan(_ context.Context, req *kvrpcpb.ScanRequest) (*kvrp
 	scanner := mvcc.NewScanner(req.StartKey, txn)
 	defer scanner.Close()
 	ret := make([]*kvrpcpb.KvPair, 0)
-	log.Infof("[DEBUG] %v %v", req.Limit, req.StartKey)
+	// log.Infof("[DEBUG] %v %v", req.Limit, req.StartKey)
 	for i := uint32(1); i <= req.Limit; {
 		key, val, err := scanner.Next()
-		log.Infof("[DEBUGDEBUG] %v %v %v", key, val, err)
+		// log.Infof("[DEBUGDEBUG] %v %v %v", key, val, err)
 		if key == nil && val == nil && err == nil {
 			break
 		}
@@ -302,7 +301,7 @@ func (server *Server) KvScan(_ context.Context, req *kvrpcpb.ScanRequest) (*kvrp
 			ret = append(ret, &kvrpcpb.KvPair{Key: key, Value: val})
 			i++
 		}
-		log.Infof("%v", i)
+		// log.Infof("%v", i)
 	}
 	resp.Pairs = ret
 	// Your Code Here (4C).

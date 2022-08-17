@@ -205,6 +205,6 @@ func doSnapshot(engines *engine_util.Engines, mgr *snap.SnapManager, regionId ui
 		return nil, err
 	}
 	snapshot.Data, err = snapshotData.Marshal()
-	log.Info("doSnapshot finish")
+	// log.Info("doSnapshot finish")
 	return snapshot, err
 }

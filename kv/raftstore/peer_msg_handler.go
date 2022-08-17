@@ -2,7 +2,6 @@ package raftstore
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/Connor1996/badger/y"
@@ -352,7 +351,7 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 	case eraftpb.ConfChangeType_AddNode:
 		if found {
 			d.handleProposal(entry, func(p *proposal) {
-				log.Info("Stale addNode!")
+				// log.Info("Stale addNode!")
 				p.cb.Done(ErrResp(&util.ErrStaleCommand{}))
 			})
 			return wb
@@ -360,14 +359,14 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 	case eraftpb.ConfChangeType_RemoveNode:
 		if !found {
 			d.handleProposal(entry, func(p *proposal) {
-				log.Info("Stale removeNode!")
+				// log.Info("Stale removeNode!")
 				p.cb.Done(ErrResp(&util.ErrStaleCommand{}))
 			})
 			return wb
 		}
 		if d.IsLeader() && len(d.Region().Peers) == 2 &&
 			d.Meta.Id == confChange.NodeId {
-			log.Info("corner case!")
+			// log.Info("corner case!")
 			d.handleProposal(entry, func(p *proposal) {
 				p.cb.Done(ErrResp(errors.New("two node drop stale leader")))
 			})
@@ -377,7 +376,7 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 
 	switch confChange.ChangeType {
 	case eraftpb.ConfChangeType_AddNode:
-		log.Infof("AddNode :%v in %v", pr, d.peer)
+		// log.Infof("AddNode :%v in %v", pr, d.peer)
 		d.Region().Peers = append(d.Region().Peers, pr)
 		d.Region().RegionEpoch.ConfVer++
 		d.insertPeerCache(pr)
@@ -388,7 +387,7 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		d.Region().RegionEpoch.ConfVer++
 		for i := range d.Region().Peers {
 			if d.Region().Peers[i].Id == pr.Id {
-				log.Infof("found peer(%v) to delete in (%v)", d.Region().Peers[i], d.peer)
+				// log.Infof("found peer(%v) to delete in (%v)", d.Region().Peers[i], d.peer)
 				d.Region().Peers = append(d.Region().Peers[:i], d.Region().Peers[i+1:]...)
 				break
 			}
@@ -401,7 +400,6 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 	}
 
 	storeMeta := d.ctx.storeMeta
-	log.Info("update storeMeta.cmdType(%v)", confChange.ChangeType.String())
 	storeMeta.Lock()
 	// storeMeta.regionRanges.Delete(&regionItem{region: d.Region()})
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: d.Region()})
@@ -418,7 +416,7 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 	}
 	if confChange.ChangeType == eraftpb.ConfChangeType_RemoveNode && confChange.NodeId == d.Meta.Id {
-		log.Info("destroy myself(%v)", d.Meta.Id)
+		// log.Info("destroy myself(%v)", d.Meta.Id)
 		d.stopped = true
 	}
 	d.handleProposal(entry, func(p *proposal) {
@@ -587,14 +585,14 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if err != nil {
 		panic(err)
 	}
-	randnum := rand.Intn(10000)
-	log.Info("SaveReadyState finish", randnum)
-	raftstate, err := meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-	if err != nil {
-		log.Info(err)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-	}
+	// randnum := rand.Intn(10000)
+	// log.Info("SaveReadyState finish", randnum)
+	// raftstate, err := meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
+	// if err != nil {
+	// 	log.Info(err)
+	// } else {
+	// 	log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
+	// }
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
 	if regionChange != nil {
@@ -609,14 +607,14 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		}
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
-		log.Info("advance_snapshot", randnum)
-		raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-		if err != nil {
-			log.Info(err)
-		} else {
-			log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-			log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
-		}
+		// log.Info("advance_snapshot", randnum)
+		// raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
+		// if err != nil {
+		// 	log.Info(err)
+		// } else {
+		// 	log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
+		// 	log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
+		// }
 		d.RaftGroup.Advance(ready)
 		return
 	} else {
@@ -687,19 +685,18 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		}
 	}
 
-	log.Info("advance", randnum)
-	raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-	if err != nil {
-		log.Info(err)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-		log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
-	}
+	// log.Info("advance", randnum)
+	// raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
+	// if err != nil {
+	// 	log.Info(err)
+	// } else {
+	// 	log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
+	// 	log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
+	// }
 	if d.stopped {
 		if d.IsLeader() {
 			d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		}
-		// d.destroyPeer()
 		return
 	}
 	d.RaftGroup.Advance(ready)
@@ -740,7 +737,7 @@ func (d *peerMsgHandler) handleReadCmd(entry *eraftpb.Entry, msg *raft_cmdpb.Raf
 					},
 				})
 			case raft_cmdpb.CmdType_Snap:
-				log.Info("{Snap:%v}", d.regionId, d.Region())
+				// log.Info("{Snap:%v}", d.regionId, d.Region())
 				resp.Responses = append(resp.Responses, &raft_cmdpb.Response{
 					CmdType: raft_cmdpb.CmdType_Snap,
 					Snap: &raft_cmdpb.SnapResponse{
