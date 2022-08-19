@@ -129,7 +129,7 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmd
 	case raft_cmdpb.AdminCmdType_CompactLog:
 		compactLog := req.GetCompactLog()
 		applySt := d.peerStorage.applyState
-		if compactLog.CompactIndex > applySt.TruncatedState.Index+1 {
+		if compactLog.CompactIndex >= d.LastCompactedIdx {
 			applySt.TruncatedState.Index = compactLog.CompactIndex
 			applySt.TruncatedState.Term = compactLog.CompactTerm
 			wb.SetMeta(meta.ApplyStateKey(d.regionId), applySt)
@@ -184,9 +184,9 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 
 	storeMeta := d.ctx.storeMeta
 	storeMeta.Lock()
-	storeMeta.regionRanges.Delete(&regionItem{region: region})
+	// storeMeta.regionRanges.Delete(&regionItem{region: region})
 	storeMeta.regions[split.NewRegionId] = newRegion
-	storeMeta.setRegion(region, d.peer)
+	storeMeta.regions[d.regionId] = region
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: region})
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: newRegion})
 	storeMeta.Unlock()
@@ -209,9 +209,9 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 	// d.ApproximateSize = nil
 	if d.IsLeader() {
 		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
+		newPeer.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		newPeer.MaybeCampaign(true)
 	}
-	d.notifyHeartbeatScheduler(newRegion, newPeer)
 
 	d.handleProposal(entry, func(p *proposal) {
 		resp := &raft_cmdpb.RaftCmdResponse{
@@ -225,19 +225,6 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 		}
 		p.cb.Done(resp)
 	})
-}
-func (d *peerMsgHandler) notifyHeartbeatScheduler(region *metapb.Region, peer *peer) {
-	clonedRegion := new(metapb.Region)
-	err := util.CloneMsg(region, clonedRegion)
-	if err != nil {
-		return
-	}
-	d.ctx.schedulerTaskSender <- &runner.SchedulerRegionHeartbeatTask{
-		Region:          clonedRegion,
-		Peer:            peer.Meta,
-		PendingPeers:    peer.CollectPendingPeers(),
-		ApproximateSize: peer.ApproximateSize,
-	}
 }
 
 // processConfChange proposals[]
@@ -269,28 +256,24 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		storeMeta.Unlock()
 		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
 		d.insertPeerCache(pr)
-		// if d.IsLeader() {
-		// 	d.PeersStartPendingTime[confChange.NodeId] = time.Now()
-		// }
 	case eraftpb.ConfChangeType_RemoveNode:
 		if !found {
 			break
 		}
-		// if d.IsLeader() && len(d.Region().Peers) == 2 &&
-		// 	d.Meta.Id == confChange.NodeId {
-		// 	d.handleProposal(entry, func(p *proposal) {
-		// 		p.cb.Done(ErrResp(errors.New("two node drop stale leader")))
-		// 	})
-		// 	return wb
-		// }
-		d.Region().RegionEpoch.ConfVer++
+		if len(d.Region().Peers) == 2 && confChange.ChangeType == eraftpb.ConfChangeType_RemoveNode &&
+			d.PeerId() == confChange.NodeId && d.storeID() == pr.StoreId {
+			d.handleProposal(entry, func(p *proposal) {
+				p.cb.Done(ErrResp(errors.New("two Node case")))
+			})
+			return wb
+		}
 		for i := range d.Region().Peers {
-			if d.Region().Peers[i].Id == pr.Id {
+			if d.Region().Peers[i].Id == pr.Id && d.Region().Peers[i].StoreId == pr.StoreId {
 				d.Region().Peers = append(d.Region().Peers[:i], d.Region().Peers[i+1:]...)
 				break
 			}
 		}
-		// d.removePeerCache(confChange.NodeId)
+		d.Region().RegionEpoch.ConfVer++
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		storeMeta.setRegion(d.Region(), d.peer)
@@ -298,11 +281,11 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
 		if d.Meta.Id == confChange.NodeId {
 			if d.MaybeDestroy() {
-				d.stopped = true
+				d.destroyPeer()
 			}
-			// debuginfo return& break&handleProposal
 			return wb
 		}
+		d.removePeerCache(confChange.NodeId)
 	}
 	// Apply to Raft/
 	d.RaftGroup.ApplyConfChange(*confChange)
@@ -561,13 +544,9 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			})
 		}
 	}
-	if d.stopped {
-		if d.IsLeader() {
-			d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
-		}
-		d.destroyPeer()
-		// return
-	}
+	// if d.stopped {
+	// return
+	// }
 	d.RaftGroup.Advance(ready)
 }
 
@@ -717,14 +696,6 @@ func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb 
 			ChangeType: req.GetChangePeer().ChangeType,
 			NodeId:     req.GetChangePeer().Peer.Id,
 			Context:    data,
-		}
-		if len(d.Region().Peers) == 2 && cc.ChangeType == eraftpb.ConfChangeType_RemoveNode && d.PeerId() == cc.NodeId {
-			for i := range d.Region().Peers {
-				if d.Region().Peers[i].Id != cc.NodeId {
-					d.RaftGroup.TransferLeader(d.Region().Peers[i].Id)
-					break
-				}
-			}
 		}
 		p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
 		d.RaftGroup.ProposeConfChange(cc)
