@@ -168,8 +168,8 @@ func (rn *RawNode) Ready() Ready {
 	rn.Raft.msgs = make([]pb.Message, 0)
 	if !IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot) {
 		ret.Snapshot = *rn.Raft.RaftLog.PendingSnapshot
-		log.Info("{DEBUGDEBUG} %v %v", rn.Raft.RaftLog.PendingSnapshot)
-		rn.Raft.RaftLog.PendingSnapshot = nil
+		// log.Info("{DEBUGDEBUG} %v %v", rn.Raft.RaftLog.PendingSnapshot)
+		// rn.Raft.RaftLog.PendingSnapshot = nil
 	}
 	return ret
 }
@@ -219,6 +219,12 @@ func (rn *RawNode) Advance(rd Ready) {
 			log.Info("[ERROR] Newly Applied Entries not Allowed")
 		}
 		rn.Raft.RaftLog.applied = lastIndex
+	}
+	if !IsEmptySnap(&rd.Snapshot) {
+		if rd.Snapshot.Metadata.Index != rn.Raft.RaftLog.PendingSnapshot.Metadata.Index {
+			panic("Apply Stale Snapshot!")
+		}
+		rn.Raft.RaftLog.PendingSnapshot = nil
 	}
 	rn.Raft.RaftLog.maybeCompact()
 }
