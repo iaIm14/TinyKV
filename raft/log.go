@@ -63,24 +63,16 @@ func newLog(storage Storage) *RaftLog {
 	ret := &RaftLog{
 		storage: storage,
 	}
-	firstIndex, err := ret.storage.FirstIndex()
-	if err != nil {
-		return nil
-	}
-	lastIndex, err := ret.storage.LastIndex()
-	if err != nil {
-		return nil
-	}
-	entries, err := ret.storage.Entries(firstIndex, lastIndex+1) // note
-	if err != nil {
-		return nil
-	}
+	firstIndex, _ := ret.storage.FirstIndex()
+	lastIndex, _ := ret.storage.LastIndex()
+	entries, _ := ret.storage.Entries(firstIndex, lastIndex+1) // note
 	ret.entries = entries
 	// left note
 	// ret.committed = firstIndex - 1
 	ret.applied = firstIndex - 1
 	ret.stabled = lastIndex
 	ret.FirstIndex = firstIndex
+	ret.PendingSnapshot = nil
 	return ret
 }
 
@@ -161,6 +153,9 @@ func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
 	// stale snapshot discarded. debuginfo
 	var index uint64
+	if l == nil {
+		panic("raftlog not found!")
+	}
 	if !IsEmptySnap(l.PendingSnapshot) {
 		index = l.PendingSnapshot.Metadata.Index
 	}

@@ -298,7 +298,7 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
 		if d.Meta.Id == confChange.NodeId {
 			if d.MaybeDestroy() {
-				d.destroyPeer()
+				d.stopped = true
 			}
 			// debuginfo return& break&handleProposal
 			return wb
@@ -498,7 +498,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	}
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
-	if regionChange != nil {
+	if !raft.IsEmptySnap(&ready.Snapshot) && regionChange != nil {
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
@@ -565,7 +565,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		if d.IsLeader() {
 			d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		}
-		// d.destroyPeer()
+		d.destroyPeer()
 		// return
 	}
 	d.RaftGroup.Advance(ready)
