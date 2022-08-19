@@ -472,6 +472,11 @@ func (d *peerMsgHandler) HandleReadEntries(entries []*eraftpb.Entry, handler fun
 			}
 			continue
 		}
+		if !d.IsLeader() {
+			d.handleReadProposal(entry, func(p *proposal) {
+				p.cb.Done(nil)
+			})
+		}
 		if msg.Requests != nil {
 			handler(entry, msg)
 		}
@@ -486,9 +491,6 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if !d.RaftGroup.HasReady() {
 		return
 	}
-	if d.RaftGroup.Raft.RaftLog.PendingSnapshot != nil && d.LastAppliedIdx != d.peerStorage.AppliedIndex() {
-		return
-	}
 	ready := d.RaftGroup.Ready()
 	regionChange, err := d.peerStorage.SaveReadyState(&ready)
 	if err != nil {
@@ -496,26 +498,20 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	}
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
-	if raft.IsEmptySnap(&ready.Snapshot) {
+	if regionChange != nil {
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
 		storeMeta.regions[regionChange.Region.Id] = regionChange.Region
 		storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 		storeMeta.Unlock()
-		d.LastAppliedIdx = d.peerStorage.applyState.AppliedIndex
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
 		d.RaftGroup.Advance(ready)
 		return
-	} else {
-		if len(ready.CommittedEntries) != 0 {
-			// should after process
-			d.LastAppliedIdx = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
-		}
 	}
 	d.Send(d.ctx.trans, ready.Messages)
-	if regionChange != nil {
+	if len(ready.CommittedEntries) != 0 {
 		wb := &engine_util.WriteBatch{}
 		readEntries := []*eraftpb.Entry{}
 		for i := range ready.CommittedEntries {
@@ -523,7 +519,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			// log.Infof("{DEBUG entry: %v string:%v %v}", entry.Data, entry.EntryType.String(), entry.Index)
 			if entry.Index != d.peerStorage.applyState.AppliedIndex+1 {
 				// TODO: maybe need panic ,not ErrStaleCommand callback
-				panic(fmt.Sprintf("stale! entry.index:%v; appliedIndex:%v; LastAppliedIdx: %v", entry.Index, d.peerStorage.applyState.AppliedIndex, d.LastAppliedIdx))
+				panic(fmt.Sprintf("stale! entry.index:%v; appliedIndex:%v", entry.Index, d.peerStorage.applyState.AppliedIndex))
 			}
 			msg := d.marshalEntry(entry)
 			d.peerStorage.applyState.AppliedIndex = entry.Index

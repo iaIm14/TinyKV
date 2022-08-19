@@ -95,7 +95,6 @@ type peer struct {
 	// Index of last scheduled compacted raft log.
 	// (Used in 2C)
 	LastCompactedIdx uint64
-	LastAppliedIdx   uint64
 
 	// Cache the peers information from other stores
 	// when sending raft messages to other peers, it's used to get the store id of target peer
@@ -159,7 +158,6 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 		PeersStartPendingTime: make(map[uint64]time.Time),
 		Tag:                   tag,
 		ticker:                newTicker(region.GetId(), cfg),
-		LastAppliedIdx:        appliedIndex,
 	}
 
 	// If this region has only one peer and I am the one, campaign directly.
