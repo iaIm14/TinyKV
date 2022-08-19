@@ -224,6 +224,8 @@ func (rn *RawNode) Advance(rd Ready) {
 		if rd.Snapshot.Metadata.Index != rn.Raft.RaftLog.PendingSnapshot.Metadata.Index {
 			panic("Apply Stale Snapshot!")
 		}
+		rn.Raft.RaftLog.stabled = max(rn.Raft.RaftLog.stabled, rd.Snapshot.Metadata.Index)
+		rn.Raft.RaftLog.applied = max(rn.Raft.RaftLog.applied, rd.Snapshot.Metadata.Index)
 		rn.Raft.RaftLog.PendingSnapshot = nil
 	}
 	rn.Raft.RaftLog.maybeCompact()

@@ -506,25 +506,15 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
 	if regionChange != nil {
-		if !util.RegionEqual(regionChange.PrevRegion, regionChange.Region) {
-			storeMeta := d.ctx.storeMeta
-			storeMeta.Lock()
-			storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
-			storeMeta.regions[regionChange.Region.Id] = regionChange.Region
-			storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
-			storeMeta.Unlock()
-		}
+		storeMeta := d.ctx.storeMeta
+		storeMeta.Lock()
+		storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
+		storeMeta.regions[regionChange.Region.Id] = regionChange.Region
+		storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
+		storeMeta.Unlock()
 		d.LastAppliedIdx = d.peerStorage.applyState.AppliedIndex
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
-		log.Info("advance_snapshot", randnum)
-		raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-		if err != nil {
-			log.Info(err)
-		} else {
-			log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-			log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
-		}
 		d.RaftGroup.Advance(ready)
 		return
 	} else {

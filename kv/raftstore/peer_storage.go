@@ -406,7 +406,7 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	if !raft.IsEmptySnap(&ready.Snapshot) {
 		result, err = ps.ApplySnapshot(&ready.Snapshot, kvWB, raftWB)
 		if err != nil {
-			return result, err
+			panic(err)
 		}
 	}
 	err = ps.Append(ready.Entries, raftWB)
