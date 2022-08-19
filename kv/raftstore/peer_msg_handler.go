@@ -130,7 +130,7 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmd
 	case raft_cmdpb.AdminCmdType_CompactLog:
 		compactLog := req.GetCompactLog()
 		applySt := d.peerStorage.applyState
-		if compactLog.CompactIndex >= applySt.TruncatedState.Index {
+		if compactLog.CompactIndex > applySt.TruncatedState.Index+1 {
 			applySt.TruncatedState.Index = compactLog.CompactIndex
 			applySt.TruncatedState.Term = compactLog.CompactTerm
 			wb.SetMeta(meta.ApplyStateKey(d.regionId), applySt)
