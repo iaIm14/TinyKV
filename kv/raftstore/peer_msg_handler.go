@@ -467,6 +467,26 @@ func (d *peerMsgHandler) handleSnapshotReady(ready *raft.Ready, regionChange *Ap
 	wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
 	wb.WriteToDB(d.peerStorage.Engines.Kv)
 }
+
+func (d *peerMsgHandler) HandleReadEntries(entries []*eraftpb.Entry, handler func(*eraftpb.Entry, *raft_cmdpb.RaftCmdRequest)) {
+	for i := range entries {
+		entry := entries[i]
+		if entry.Index > d.peerStorage.applyState.AppliedIndex {
+			return
+		}
+		msg := d.marshalEntry(entry)
+		if msg.AdminRequest != nil {
+			if msg.AdminRequest.CmdType != raft_cmdpb.AdminCmdType_InvalidAdmin {
+				log.Info("[warn] AdminCmdType_InvalidAdmin")
+			}
+			continue
+		}
+		if msg.Requests != nil {
+			handler(entry, msg)
+		}
+	}
+}
+
 func (d *peerMsgHandler) HandleRaftReady() {
 	if d.stopped {
 		return
@@ -562,24 +582,14 @@ func (d *peerMsgHandler) HandleRaftReady() {
 				panic(err)
 			}
 		}
-		for i := range readEntries {
-			entry := readEntries[i]
-			if entry.Index > d.peerStorage.applyState.AppliedIndex {
-				break
-			}
-			msg := d.marshalEntry(entry)
-			if msg.AdminRequest != nil {
-				if msg.AdminRequest.CmdType != raft_cmdpb.AdminCmdType_InvalidAdmin {
-					// TODO:update to log.info
-					panic("unexpected AdminRequest in func ApplyEntries()")
-				}
-				continue
-			}
-			// log.Infof("[handle readEntries]:%v; %v; %v; get:%v; snap:%v", &readEntries[i], readEntries[i].EntryType.String(), msg.Requests[0].CmdType.String(), msg.Requests[0].Get, msg.Requests[0].Snap)
-			if msg.Requests != nil {
-				// log.Info("[DEBUG] handleReadCmd")
-				d.handleReadCmd(entry, msg)
-			}
+		if !d.stopped {
+			d.HandleReadEntries(readEntries, d.handleReadCmd)
+		} else {
+			d.HandleReadEntries(readEntries, func(e *eraftpb.Entry, rcr *raft_cmdpb.RaftCmdRequest) {
+				d.handleReadProposal(e, func(p *proposal) {
+					p.cb.Done(nil)
+				})
+			})
 		}
 	}
 
