@@ -521,8 +521,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
 			storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 			storeMeta.Unlock()
-			d.LastAppliedIdx = d.peerStorage.applyState.AppliedIndex
 		}
+		d.LastAppliedIdx = d.peerStorage.applyState.AppliedIndex
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
 		log.Info("advance_snapshot", randnum)
