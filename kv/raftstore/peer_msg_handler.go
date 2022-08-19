@@ -269,12 +269,12 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		}
 		d.Region().Peers = append(d.Region().Peers, pr)
 		d.Region().RegionEpoch.ConfVer++
-		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
-		d.insertPeerCache(pr)
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		storeMeta.setRegion(d.Region(), d.peer)
 		storeMeta.Unlock()
+		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
+		d.insertPeerCache(pr)
 		// if d.IsLeader() {
 		// 	d.PeersStartPendingTime[confChange.NodeId] = time.Now()
 		// }
@@ -755,14 +755,14 @@ func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb 
 			NodeId:     req.GetChangePeer().Peer.Id,
 			Context:    data,
 		}
-		// if len(d.Region().Peers) == 2 && cc.ChangeType == eraftpb.ConfChangeType_RemoveNode && d.PeerId() == cc.NodeId {
-		// 	for i := range d.Region().Peers {
-		// 		if d.Region().Peers[i].Id != cc.NodeId {
-		// 			d.RaftGroup.TransferLeader(d.Region().Peers[i].Id)
-		// 			break
-		// 		}
-		// 	}
-		// }
+		if len(d.Region().Peers) == 2 && cc.ChangeType == eraftpb.ConfChangeType_RemoveNode && d.PeerId() == cc.NodeId {
+			for i := range d.Region().Peers {
+				if d.Region().Peers[i].Id != cc.NodeId {
+					d.RaftGroup.TransferLeader(d.Region().Peers[i].Id)
+					break
+				}
+			}
+		}
 		p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
 		d.RaftGroup.ProposeConfChange(cc)
 		d.proposals = append(d.proposals, p)
