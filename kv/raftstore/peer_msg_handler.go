@@ -180,18 +180,17 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 		},
 		Peers: newPeers,
 	}
-
-	storeMeta := d.ctx.storeMeta
-	storeMeta.Lock()
-	defer storeMeta.Unlock()
-	//
-	storeMeta.regionRanges.Delete(&regionItem{region: region})
 	region.RegionEpoch.Version++
 	region.EndKey = split.SplitKey
 
+	storeMeta := d.ctx.storeMeta
+	storeMeta.Lock()
+	storeMeta.regionRanges.Delete(&regionItem{region: region})
+	storeMeta.regions[split.NewRegionId] = newRegion
 	storeMeta.setRegion(region, d.peer)
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: region})
 	storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: newRegion})
+	storeMeta.Unlock()
 
 	meta.WriteRegionState(wb, region, rspb.PeerState_Normal)
 	meta.WriteRegionState(wb, newRegion, rspb.PeerState_Normal)
@@ -203,16 +202,12 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 	for i := range newPeers {
 		newPeer.insertPeerCache(newPeers[i])
 	}
-	storeMeta.setRegion(newRegion, newPeer)
+
 	d.ctx.router.register(newPeer)
 	d.ctx.router.send(split.NewRegionId, message.NewMsg(message.MsgTypeStart, nil))
-	// for i := range storeMeta.pendingVotes {
-	// 	votes := storeMeta.pendingVotes[i].ToPeer
 
-	// }
-
-	d.SizeDiffHint = 0
-	d.ApproximateSize = nil
+	// d.SizeDiffHint = 0
+	// d.ApproximateSize = nil
 	if d.IsLeader() {
 		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		newPeer.MaybeCampaign(true)
@@ -289,13 +284,6 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		// 	})
 		// 	return wb
 		// }
-		if d.Meta.Id == confChange.NodeId {
-			if d.MaybeDestroy() {
-				d.destroyPeer()
-			}
-			// debuginfo return& break&handleProposal
-			return wb
-		}
 		d.Region().RegionEpoch.ConfVer++
 		for i := range d.Region().Peers {
 			if d.Region().Peers[i].Id == pr.Id {
@@ -304,11 +292,18 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 			}
 		}
 		// d.removePeerCache(confChange.NodeId)
-		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		storeMeta.setRegion(d.Region(), d.peer)
 		storeMeta.Unlock()
+		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
+		if d.Meta.Id == confChange.NodeId {
+			if d.MaybeDestroy() {
+				d.destroyPeer()
+			}
+			// debuginfo return& break&handleProposal
+			return wb
+		}
 	}
 	// Apply to Raft/
 	d.RaftGroup.ApplyConfChange(*confChange)
@@ -514,8 +509,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		if !util.RegionEqual(regionChange.PrevRegion, regionChange.Region) {
 			storeMeta := d.ctx.storeMeta
 			storeMeta.Lock()
-			storeMeta.regions[regionChange.Region.Id] = regionChange.Region
 			storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
+			storeMeta.regions[regionChange.Region.Id] = regionChange.Region
 			storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 			storeMeta.Unlock()
 		}
@@ -603,7 +598,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		}
 		// d.destroyPeer()
-		return
+		// return
 	}
 	d.RaftGroup.Advance(ready)
 }
