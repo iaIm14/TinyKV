@@ -2,7 +2,6 @@ package raftstore
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/Connor1996/badger/y"
@@ -495,17 +494,9 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if err != nil {
 		panic(err)
 	}
-	randnum := rand.Intn(10000)
-	log.Info("SaveReadyState finish", randnum)
-	raftstate, err := meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-	if err != nil {
-		log.Info(err)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-	}
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
-	if regionChange != nil {
+	if raft.IsEmptySnap(&ready.Snapshot) {
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
@@ -524,7 +515,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		}
 	}
 	d.Send(d.ctx.trans, ready.Messages)
-	if len(ready.CommittedEntries) != 0 {
+	if regionChange != nil {
 		wb := &engine_util.WriteBatch{}
 		readEntries := []*eraftpb.Entry{}
 		for i := range ready.CommittedEntries {
@@ -573,15 +564,6 @@ func (d *peerMsgHandler) HandleRaftReady() {
 				})
 			})
 		}
-	}
-
-	log.Info("advance", randnum)
-	raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-	if err != nil {
-		log.Info(err)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-		log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
 	}
 	if d.stopped {
 		if d.IsLeader() {
