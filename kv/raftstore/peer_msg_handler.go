@@ -273,7 +273,7 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		d.insertPeerCache(pr)
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
-		storeMeta.regions[d.regionId] = d.Region()
+		storeMeta.setRegion(d.Region(), d.peer)
 		storeMeta.Unlock()
 		// if d.IsLeader() {
 		// 	d.PeersStartPendingTime[confChange.NodeId] = time.Now()
@@ -291,9 +291,6 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 		// }
 		if d.Meta.Id == confChange.NodeId {
 			if d.MaybeDestroy() {
-				if d.IsLeader() {
-					d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
-				}
 				d.destroyPeer()
 			}
 			// debuginfo return& break&handleProposal
@@ -306,11 +303,11 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 				break
 			}
 		}
-		d.removePeerCache(confChange.NodeId)
+		// d.removePeerCache(confChange.NodeId)
 		meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
-		storeMeta.regions[d.regionId] = d.Region()
+		storeMeta.setRegion(d.Region(), d.peer)
 		storeMeta.Unlock()
 	}
 	// Apply to Raft/
