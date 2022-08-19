@@ -501,8 +501,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
 			storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 			storeMeta.Unlock()
+			d.LastAppliedIdx = d.peerStorage.applyState.AppliedIndex
 		}
-		d.LastAppliedIdx = d.peerStorage.applyState.AppliedIndex
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
 		log.Info("advance_snapshot", randnum)
@@ -517,6 +517,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		return
 	} else {
 		if len(ready.CommittedEntries) != 0 {
+			// should after process
 			d.LastAppliedIdx = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
 		}
 	}
@@ -594,7 +595,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		if d.IsLeader() {
 			d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		}
-		d.destroyPeer()
+		// d.destroyPeer()
 		return
 	}
 	d.RaftGroup.Advance(ready)
