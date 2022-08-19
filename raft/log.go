@@ -164,14 +164,6 @@ func (l *RaftLog) LastIndex() uint64 {
 	}
 	i, _ := l.storage.LastIndex()
 	return max(i, index)
-	// if len(l.entries) == 0 && IsEmptySnap(l.PendingSnapshot) {
-	// 	ret, _ := l.storage.LastIndex()
-	// 	return ret
-	// } else if len(l.entries) == 0 && !IsEmptySnap(l.PendingSnapshot) {
-	// 	return l.PendingSnapshot.Metadata.Index
-	// } else {
-	// 	return uint64(len(l.entries)) + l.FirstIndex - 1
-	// }
 }
 
 // Term return the term of the entry in the given index
@@ -191,26 +183,6 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 	}
 	return term, err
 	// // Your Code Here (2A).
-	// // if i > l.LastIndex() {
-	// // 	log.Info("[ERROR] lastIndex > prevLogIndex")
-	// // 	return 0, ErrCompacted
-	// // }
-	// if len(l.entries) > 0 && i >= l.FirstIndex {
-	// 	return l.entries[i-l.FirstIndex].Term, nil
-	// }
-	// ret, err := l.storage.Term(i)
-	// if err == ErrUnavailable && !IsEmptySnap(l.PendingSnapshot) {
-	// 	if i == l.PendingSnapshot.Metadata.Index {
-	// 		return l.PendingSnapshot.Metadata.Term, nil
-	// 	} else if i < l.PendingSnapshot.Metadata.Index {
-	// 		// log.Info("[DEBUG] return ErrCompacted")
-	// 		return ret, ErrCompacted
-	// 	} else {
-	// 		// log.Info("[DEBUG] return err: %v", err.Error())
-	// 		return ret, err
-	// 	}
-	// }
-	// return ret, err
 }
 
 // LastTerm return last term
