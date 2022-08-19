@@ -2,7 +2,6 @@ package raftstore
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/Connor1996/badger/y"
@@ -164,7 +163,7 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 		})
 		return
 	}
-
+	log.Info("split")
 	newPeers := make([]*metapb.Peer, 0)
 	// sort
 	for i := range split.NewPeerIds {
@@ -206,8 +205,8 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 	d.ctx.router.register(newPeer)
 	d.ctx.router.send(split.NewRegionId, message.NewMsg(message.MsgTypeStart, nil))
 
-	d.SizeDiffHint = 0
-	d.ApproximateSize = nil
+	// d.SizeDiffHint = 0
+	// d.ApproximateSize = nil
 	if d.IsLeader() {
 		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 		newPeer.HeartbeatScheduler(d.ctx.schedulerTaskSender)
@@ -438,7 +437,6 @@ func (d *peerMsgHandler) handleSnapshotReady(ready *raft.Ready, regionChange *Ap
 func (d *peerMsgHandler) HandleRaftSnapshot(regionChange *ApplySnapResult, ready *raft.Ready) {
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
-	d.PendingIdx = d.peerStorage.applyState.AppliedIndex
 	if !util.RegionEqual(regionChange.PrevRegion, regionChange.Region) {
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
@@ -447,10 +445,9 @@ func (d *peerMsgHandler) HandleRaftSnapshot(regionChange *ApplySnapResult, ready
 		storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 		storeMeta.Unlock()
 	}
+	d.PendingIdx = d.peerStorage.applyState.AppliedIndex
 	d.Send(d.ctx.trans, ready.Messages)
-	go func() {
-		d.handleSnapshotReady(ready, regionChange)
-	}()
+	d.handleSnapshotReady(ready, regionChange)
 	d.RaftGroup.Advance(*ready)
 }
 func (d *peerMsgHandler) HandleReadEntries(entries []*eraftpb.Entry, handler func(*eraftpb.Entry, *raft_cmdpb.RaftCmdRequest)) {
@@ -486,14 +483,6 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	regionChange, err := d.peerStorage.SaveReadyState(&ready)
 	if err != nil {
 		panic(err)
-	}
-	randnum := rand.Intn(10000)
-	log.Info("SaveReadyState finish", randnum)
-	raftstate, err := meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-	if err != nil {
-		log.Info(err)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
 	}
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
@@ -559,19 +548,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if len(ready.CommittedEntries) != 0 {
 		d.PendingIdx = d.peerStorage.applyState.AppliedIndex
 	}
-
-	log.Info("advance", randnum)
-	raftstate, err = meta.GetRaftLocalState(d.ctx.engine.Raft, d.regionId)
-	if err != nil {
-		log.Info(err)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-		log.Info("RaftPoint:!!", d.ctx.engine.Raft, " ", d.regionId)
-	}
 	if d.stopped {
-		if d.IsLeader() {
-			d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
-		}
+		d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 	}
 	d.RaftGroup.Advance(ready)
 }

@@ -330,6 +330,7 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 		if split {
 			r := cluster.GetRegion([]byte(""))
 			if len(r.GetEndKey()) == 0 {
+				log.Info("[DEBUG+++++] %v %v %v %v", r.Peers, r.RegionEpoch, r.Id)
 				t.Fatalf("region is not split")
 			}
 		}
