@@ -15,6 +15,8 @@
 package raft
 
 import (
+	"sort"
+
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -49,31 +51,27 @@ type RaftLog struct {
 
 	// the incoming unstable snapshot, if any.
 	// (Used in 2C)
-	PendingSnapshot *pb.Snapshot
+	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
-	// first entry in Raftlog.entries 's Index ==FirstIndex
-	FirstIndex uint64
 }
 
 // newLog returns log using the given storage. It recovers the log
 // to the state that it just commits and applies the latest snapshot.
 func newLog(storage Storage) *RaftLog {
 	// Your Code Here (2A).
-	ret := &RaftLog{
-		storage: storage,
+	firstIndex, _ := storage.FirstIndex()
+	lastIndex, _ := storage.LastIndex()
+	ents, _ := storage.Entries(firstIndex, lastIndex+1)
+	raftLog := &RaftLog{
+		storage:         storage,
+		committed:       firstIndex - 1,
+		applied:         firstIndex - 1,
+		stabled:         lastIndex,
+		entries:         ents,
+		pendingSnapshot: nil,
 	}
-	firstIndex, _ := ret.storage.FirstIndex()
-	lastIndex, _ := ret.storage.LastIndex()
-	entries, _ := ret.storage.Entries(firstIndex, lastIndex+1) // note
-	ret.entries = entries
-	// left note
-	// ret.committed = firstIndex - 1
-	ret.applied = firstIndex - 1
-	ret.stabled = lastIndex
-	ret.FirstIndex = firstIndex
-	ret.PendingSnapshot = nil
-	return ret
+	return raftLog
 }
 
 // We need to compact the log entries in some point of time like
@@ -81,168 +79,177 @@ func newLog(storage Storage) *RaftLog {
 // grow unlimitedly in memory
 func (l *RaftLog) maybeCompact() {
 	// Your Code Here (2C).
-	// MemoryStorage.entries[0].Index+1==FirstIndex
-	// dummy entries
-	firstIndex, _ := l.storage.FirstIndex()
-	// if err != nil {
-	// 	return
-	// }
-	// RaftLog.entries contains [maybeFirstIndex==latest Snapshot's lastindex+1,lastindex]
-	if firstIndex > l.FirstIndex {
-		if len(l.entries) != 0 {
-			entries := l.entries[firstIndex-l.FirstIndex:]
-			l.entries = entries
+	firstindex, err := l.storage.FirstIndex()
+	if err != nil {
+		panic(err)
+	}
+	if firstindex > l.FirstIndex() {
+		if len(l.entries) > 0 {
+			if firstindex > l.LastIndex() {
+				l.entries = nil
+			} else {
+				l.entries = l.entries[l.entIdx2slcIdx(firstindex):]
+			}
 		}
-		l.FirstIndex = firstIndex
 	}
 }
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
-	if l.stabled >= l.LastIndex() {
-		// log.Info("[ERROR] l.stabled >=l.lastIndex")
-		return []pb.Entry{}
+	if len(l.entries) == 0 {
+		return nil
 	}
-	return l.entries[l.stabled+1-l.FirstIndex:]
+	return l.entries[l.entIdx2slcIdx(l.stabled)+1:]
 }
 
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	if l.applied >= l.committed {
-		// log.Info("[ERROR] l.applied >=l.lastIndex")
-		return []pb.Entry{}
+	if len(l.entries) == 0 || l.committed == l.applied {
+		return nil
 	}
-	return l.getEntries(l.applied+1, l.committed+1)
-}
-
-// getEntries return all Entry Index between [lo,ro)
-func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
-	return l.entries[lo-l.FirstIndex : ro-l.FirstIndex]
-	// lastIndex := l.LastIndex()
-	// // firstIndex, _ := l.storage.FirstIndex()
-	// firstIndex := l.FirstIndex
-	// // note ro > lastIndex +1
-	// if lo > lastIndex || ro > lastIndex+1 || lo == ro || lo < firstIndex {
-	// 	return []pb.Entry{}
-	// }
-	// if len(l.entries) > 0 {
-	// 	var ents []pb.Entry
-	// 	if lo < l.FirstIndex {
-	// 		entries, err := l.storage.Entries(lo, min(l.FirstIndex, ro))
-	// 		if err != nil {
-	// 			return nil
-	// 		}
-	// 		ents = entries
-	// 		log.Infof("[ERROR] getEntries partly from storage: %v", ents)
-	// 	}
-	// 	if ro > l.FirstIndex {
-	// 		ents = append(ents, l.entries[max(lo, l.FirstIndex)-l.FirstIndex:ro-l.FirstIndex]...)
-	// 	}
-	// 	return ents
-	// } else {
-	// 	ents, _ := l.storage.Entries(lo, ro)
-	// 	log.Infof("[ERROR] getEntries all from storage: %v", ents)
-	// 	return ents
-	// }
+	return l.entries[l.entIdx2slcIdx(l.applied)+1 : l.entIdx2slcIdx(l.committed)+1]
 }
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
-	// stale snapshot discarded. debuginfo
-	var index uint64
-	if l == nil {
-		panic("raftlog not found!")
-	}
-	if !IsEmptySnap(l.PendingSnapshot) {
-		index = l.PendingSnapshot.Metadata.Index
-	}
 	if len(l.entries) > 0 {
-		return max(l.entries[len(l.entries)-1].Index, index)
+		return l.entries[len(l.entries)-1].Index
 	}
-	i, _ := l.storage.LastIndex()
-	return max(i, index)
-	// if len(l.entries) == 0 && IsEmptySnap(l.PendingSnapshot) {
-	// 	ret, _ := l.storage.LastIndex()
-	// 	return ret
-	// } else if len(l.entries) == 0 && !IsEmptySnap(l.PendingSnapshot) {
-	// 	return l.PendingSnapshot.Metadata.Index
-	// } else {
-	// 	return uint64(len(l.entries)) + l.FirstIndex - 1
-	// }
+	if l.pendingSnapshot != nil {
+		return l.pendingSnapshot.Metadata.Index
+	}
+	lastindex, err := l.storage.LastIndex()
+	if err != nil {
+		return 0
+	}
+	return lastindex
+}
+
+// FirstIndex return the first index of the log entries
+func (l *RaftLog) FirstIndex() uint64 {
+	if len(l.entries) > 0 {
+		return l.entries[0].Index
+	}
+	return 0
 }
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
-	if len(l.entries) > 0 && i >= l.FirstIndex {
-		// log.Infof("uint64(i)=(%v), firstIndex:%v", i, l.FirstIndex)
-		return l.entries[i-l.FirstIndex].Term, nil
+	// Your Code Here (2A).
+	length := uint64(len(l.entries))
+	if length > 0 && i-l.FirstIndex() >= 0 && i-l.FirstIndex() < length {
+		return l.entries[l.entIdx2slcIdx(i)].Term, nil
 	}
 	term, err := l.storage.Term(i)
-	if err == ErrUnavailable && !IsEmptySnap(l.PendingSnapshot) {
-		if i == l.PendingSnapshot.Metadata.Index {
-			term = l.PendingSnapshot.Metadata.Term
-			err = nil
-		} else if i < l.PendingSnapshot.Metadata.Index {
-			err = ErrCompacted
+	if err != nil && !IsEmptySnap(l.pendingSnapshot) {
+		if i == l.pendingSnapshot.Metadata.Index {
+			return l.pendingSnapshot.Metadata.Term, nil
+		}
+		if i < l.pendingSnapshot.Metadata.Index {
+			return 0, ErrCompacted
 		}
 	}
 	return term, err
-	// // Your Code Here (2A).
-	// // if i > l.LastIndex() {
-	// // 	log.Info("[ERROR] lastIndex > prevLogIndex")
-	// // 	return 0, ErrCompacted
-	// // }
-	// if len(l.entries) > 0 && i >= l.FirstIndex {
-	// 	return l.entries[i-l.FirstIndex].Term, nil
-	// }
-	// ret, err := l.storage.Term(i)
-	// if err == ErrUnavailable && !IsEmptySnap(l.PendingSnapshot) {
-	// 	if i == l.PendingSnapshot.Metadata.Index {
-	// 		return l.PendingSnapshot.Metadata.Term, nil
-	// 	} else if i < l.PendingSnapshot.Metadata.Index {
-	// 		// log.Info("[DEBUG] return ErrCompacted")
-	// 		return ret, ErrCompacted
-	// 	} else {
-	// 		// log.Info("[DEBUG] return err: %v", err.Error())
-	// 		return ret, err
-	// 	}
-	// }
-	// return ret, err
 }
 
-// LastTerm return last term
-func (l *RaftLog) LastTerm() (uint64, error) {
+// return entries with index [left, lastindex].
+// if left > lastindex return nil
+func (l *RaftLog) getEntries(left uint64) ([]pb.Entry, error) {
+	if left < l.FirstIndex() {
+		return nil, ErrUnavailable
+	}
 	lastIndex := l.LastIndex()
-	return l.Term(lastIndex)
+	if left > lastIndex || lastIndex == 0 {
+		return nil, nil
+	}
+	return l.entries[l.entIdx2slcIdx(left):], nil
 }
 
-// BaseAppendEntries Follower append entries, maybe conflict
-// base on etcd: func (*unstable) truncateAndAppend()
-func (l *RaftLog) BaseAppendEntries(entries ...*pb.Entry) {
-	if len(entries) == 0 {
-		return
+// append entries to raftlog
+func (l *RaftLog) append(ents []*pb.Entry) {
+	for _, ent := range ents {
+		l.entries = append(l.entries, *ent)
 	}
-	prevIndex := entries[0].Index - 1
-	switch {
-	case prevIndex == l.FirstIndex+uint64(len(l.entries))-1:
-		for _, v := range entries {
-			l.entries = append(l.entries, *v)
+}
+
+// check to append entries
+func (l *RaftLog) appendEntries(prevLogTerm uint64, prevLogIndex uint64, leaderCommit uint64, ents []*pb.Entry) (uint64, bool) {
+	t, _ := l.Term(prevLogIndex)
+	// quick go back in raft paper 5.3
+	if t != prevLogTerm {
+		index := min(prevLogIndex, l.LastIndex())
+		for index > l.committed {
+			term, err := l.Term(index)
+			if err != nil || term != t {
+				break
+			}
+			index--
 		}
-	case prevIndex < l.FirstIndex:
-		l.stabled = min(l.stabled, prevIndex)
-		l.FirstIndex = prevIndex + 1
-		l.entries = []pb.Entry{}
-		for _, v := range entries {
-			l.entries = append(l.entries, *v)
-		}
-	default:
-		l.stabled = min(prevIndex, l.stabled)
-		l.entries = append([]pb.Entry{}, l.getEntries(l.FirstIndex, prevIndex+1)...)
-		for _, v := range entries {
-			l.entries = append(l.entries, *v)
+		return index, false
+	}
+	// find the largest inconflict index
+	if len(l.entries) == 0 {
+		l.append(ents)
+	} else {
+		for i, ent := range ents {
+			t, err := l.Term(ent.Index)
+			if err != nil || t != ent.Term {
+				l.stabled = min(l.stabled, ent.Index-1)
+				l.entries = l.entries[:l.entIdx2slcIdx(ent.Index-1)+1]
+				l.append(ents[i:])
+				break
+			}
 		}
 	}
+
+	if leaderCommit > l.committed {
+		l.committed = min(leaderCommit, prevLogIndex+uint64(len(ents)))
+	}
+	return l.LastIndex(), true
+}
+
+// update commit index.
+// call by leader to update commit.
+// return true if commit update
+func (l *RaftLog) updateCommit(term uint64, prs map[uint64]*Progress) bool {
+	matches := make(uint64Slice, 0, len(prs))
+	for _, pr := range prs {
+		matches = append(matches, pr.Match)
+	}
+	sort.Sort(matches)
+	//if len(prs) == 1......
+	index := matches[(len(prs)-1)/2]
+	if index > l.committed && l.entries[l.entIdx2slcIdx(index)].Term == term {
+		l.committed = index
+		return true
+	}
+	return false
+}
+
+func (l *RaftLog) handleSnapshot(snap *pb.Snapshot) {
+	snapIndex := snap.Metadata.Index
+	l.committed = snapIndex
+	//l.stabled = snapIndex
+	//l.applied = snapIndex
+	l.entries = nil
+	l.pendingSnapshot = snap
+}
+
+func (l *RaftLog) advanceSnapshot(sindex uint64) {
+	l.stabled = max(l.stabled, sindex)
+	l.applied = max(l.applied, sindex)
+	if !IsEmptySnap(l.pendingSnapshot) && l.pendingSnapshot.Metadata.Index == sindex {
+		l.pendingSnapshot = nil
+	}
+}
+
+func (l *RaftLog) entIdx2slcIdx(i uint64) int {
+	return int(i - l.FirstIndex())
+}
+
+func (l *RaftLog) slcIdx2entIdx(i int) uint64 {
+	return uint64(i) + l.FirstIndex()
 }

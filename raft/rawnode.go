@@ -17,7 +17,6 @@ package raft
 import (
 	"errors"
 
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -69,21 +68,21 @@ type Ready struct {
 
 // RawNode is a wrapper of Raft.
 type RawNode struct {
-	Raft         *Raft
-	preSoftState *SoftState
-	preHardState pb.HardState
+	Raft *Raft
 	// Your Data Here (2A).
+	prevSoftState *SoftState
+	prevHardState pb.HardState
 }
 
 // NewRawNode returns a new RawNode given configuration and a list of raft peers.
 func NewRawNode(config *Config) (*RawNode, error) {
 	// Your Code Here (2A).
-	r := newRaft(config)
-	return &RawNode{
-		Raft:         r,
-		preSoftState: r.SoftState(),
-		preHardState: r.HardState(),
-	}, nil
+	rawnode := &RawNode{
+		Raft: newRaft(config),
+	}
+	rawnode.prevSoftState = rawnode.Raft.SoftState()
+	rawnode.prevHardState = rawnode.Raft.HardState()
+	return rawnode, nil
 }
 
 // Tick advances the internal logical clock by a single tick.
@@ -93,7 +92,6 @@ func (rn *RawNode) Tick() {
 
 // Campaign causes this RawNode to transition to candidate state.
 func (rn *RawNode) Campaign() error {
-	log.Infof("[DEBUG]Campaign call step ,RawNode.RaftID:%v", rn.Raft.id)
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgHup,
 	})
@@ -152,86 +150,72 @@ func (rn *RawNode) Step(m pb.Message) error {
 // Ready returns the current point-in-time state of this RawNode.
 func (rn *RawNode) Ready() Ready {
 	// Your Code Here (2A).
-	ret := Ready{
+	ready := Ready{
+		SoftState:        nil,
+		HardState:        pb.HardState{},
 		Entries:          rn.Raft.RaftLog.unstableEntries(),
 		CommittedEntries: rn.Raft.RaftLog.nextEnts(),
 		Messages:         rn.Raft.msgs,
 	}
-	newSoftState := rn.Raft.SoftState()
-	if !isSoftStateEqual(*newSoftState, *rn.preSoftState) {
-		ret.SoftState = newSoftState
+	rn.Raft.msgs = nil
+	soft := rn.Raft.SoftState()
+	hard := rn.Raft.HardState()
+	if soft.Lead != rn.prevSoftState.Lead || soft.RaftState != rn.prevSoftState.RaftState {
+		ready.SoftState = soft
 	}
-	newHardState := rn.Raft.HardState()
-	if !isHardStateEqual(newHardState, rn.preHardState) {
-		ret.HardState = newHardState
+	if !isHardStateEqual(hard, rn.prevHardState) {
+		ready.HardState = hard
 	}
-	rn.Raft.msgs = make([]pb.Message, 0)
-	if !IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot) {
-		ret.Snapshot = *rn.Raft.RaftLog.PendingSnapshot
-		// log.Info("{DEBUGDEBUG} %v %v", rn.Raft.RaftLog.PendingSnapshot)
-		// rn.Raft.RaftLog.PendingSnapshot = nil
+	if !IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot) {
+		ready.Snapshot = *rn.Raft.RaftLog.pendingSnapshot
+		//rn.Raft.RaftLog.pendingSnapshot = nil
 	}
-	return ret
+	return ready
 }
 
 // HasReady called when RawNode user need to check if any Ready pending.
 func (rn *RawNode) HasReady() bool {
 	// Your Code Here (2A).
-	ret := len(rn.Raft.msgs) != 0 || len(rn.Raft.RaftLog.nextEnts()) != 0 || len(rn.Raft.RaftLog.unstableEntries()) != 0 ||
-		!isSoftStateEqual(*rn.preSoftState, *rn.Raft.SoftState()) ||
-		// debuginfo:preSoftState changes in Ready() function
-		(!isHardStateEqual(rn.preHardState, rn.Raft.HardState()) && !IsEmptyHardState(rn.Raft.HardState())) ||
-		(!IsEmptySnap(rn.Raft.RaftLog.PendingSnapshot))
-	// if ret {
-	// log.Infof("[DEBUG]soft :%v %v", *rn.preSoftState, *rn.Raft.SoftState())
-	// log.Infof("[DEBUG]hard :%v %v", rn.preHardState, rn.Raft.HardState())
-	// log.Infof("[DEBUG]rn.Raft.Raftlog.nextEnts: %v", rn.Raft.RaftLog.nextEnts())
-	// log.Infof("[DEBUG]rn.Raft.Raftlog.unstableEntries: %v", rn.Raft.RaftLog.unstableEntries())
-	// log.Infof("[DEBUG]rn.Raft.msgs: %v", rn.Raft.msgs)
-	// }
-	return ret
+	if len(rn.Raft.msgs) > 0 || rn.Raft.RaftLog.stabled != rn.Raft.RaftLog.LastIndex() || rn.Raft.RaftLog.committed != rn.Raft.RaftLog.applied {
+		return true
+	}
+	soft := rn.Raft.SoftState()
+	if soft.Lead != rn.prevSoftState.Lead || soft.RaftState != rn.prevSoftState.RaftState {
+		return true
+	}
+	hard := rn.Raft.HardState()
+	if !isHardStateEqual(hard, rn.prevHardState) {
+		return true
+	}
+	if !IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot) {
+		return true
+	}
+	return false
 }
 
 // Advance notifies the RawNode that the application has applied and saved progress in the
 // last Ready results.
 func (rn *RawNode) Advance(rd Ready) {
 	// Your Code Here (2A).
-	// if !isSoftStateEqual(*rd.SoftState, *rn.preSoftState) {
-	// 	rn.preSoftState = rd.SoftState
-	// }
 	if rd.SoftState != nil {
-		rn.preSoftState = rd.SoftState
+		rn.prevSoftState = rd.SoftState
 	}
-	if !IsEmptyHardState(rd.HardState) {
-		rn.preHardState = rd.HardState
+	if !isHardStateEqual(rd.HardState, pb.HardState{}) {
+		rn.prevHardState = rd.HardState
 	}
-	if len(rd.Entries) != 0 {
-		// rn.Raft.RaftLog.stabled = rd.Entries[len(rd.Entries)-1].Index
-		lastIndex := rd.Entries[len(rd.Entries)-1].Index
-		// log.Infof("[DEBUG]+++ lastIndex:%v  FirstIndex:%v", lastIndex, rn.Raft.RaftLog.FirstIndex)
-		// rn.Raft.RaftLog.entries = rn.Raft.RaftLog.entries[lastIndex-rn.Raft.RaftLog.FirstIndex+1:]
-		// rn.Raft.RaftLog.FirstIndex = lastIndex + 1
-		rn.Raft.RaftLog.stabled = lastIndex
+	if len(rd.CommittedEntries) > 0 {
+		rn.Raft.RaftLog.applied = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
 	}
-	if len(rd.CommittedEntries) != 0 {
-		lastIndex := rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
-		if lastIndex < rn.Raft.RaftLog.applied || lastIndex > rn.Raft.RaftLog.committed {
-			log.Info("[ERROR] Newly Applied Entries not Allowed")
-		}
-		rn.Raft.RaftLog.applied = lastIndex
+	if len(rd.Entries) > 0 {
+		rn.Raft.RaftLog.stabled = rd.Entries[len(rd.Entries)-1].Index
 	}
 	if !IsEmptySnap(&rd.Snapshot) {
-		if rd.Snapshot.Metadata.Index != rn.Raft.RaftLog.PendingSnapshot.Metadata.Index {
-			panic("Apply Stale Snapshot!")
-		}
-		rn.Raft.RaftLog.stabled = max(rn.Raft.RaftLog.stabled, rd.Snapshot.Metadata.Index)
-		rn.Raft.RaftLog.applied = max(rn.Raft.RaftLog.applied, rd.Snapshot.Metadata.Index)
-		rn.Raft.RaftLog.PendingSnapshot = nil
+		rn.Raft.RaftLog.advanceSnapshot(rd.Snapshot.Metadata.Index)
 	}
 	rn.Raft.RaftLog.maybeCompact()
 }
 
-// GetProgress return the Progress of this node and its peers, if this
+// GetProgress return the the Progress of this node and its peers, if this
 // node is leader.
 func (rn *RawNode) GetProgress() map[uint64]Progress {
 	prs := make(map[uint64]Progress)
