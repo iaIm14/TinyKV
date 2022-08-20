@@ -171,11 +171,10 @@ func (l *Logger) logf(t LogType, format string, v ...interface{}) {
 		return
 	}
 
-	logStr, _ := LogTypeToString(t) //logColor
+	logStr, logColor := LogTypeToString(t)
 	var s string
 	if l.highlighting {
-		// s = "\033" + logColor + "m[" + logStr + "] " + fmt.Sprintf(format, v...) + "\033[0m"
-		s = "[" + logStr + "] " + fmt.Sprintf(format, v...)
+		s = "\033" + logColor + "m[" + logStr + "] " + fmt.Sprintf(format, v...) + "\033[0m"
 	} else {
 		s = "[" + logStr + "] " + fmt.Sprintf(format, v...)
 	}
@@ -267,8 +266,7 @@ func LogTypeToString(t LogType) (string, string) {
 }
 
 func New() *Logger {
-	file, _ := os.OpenFile("/home/huanggangqi/Desktop/tinykv/output_2.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
-	return NewLogger(file, "")
+	return NewLogger(os.Stderr, "")
 }
 
 func NewLogger(w io.Writer, prefix string) *Logger {
@@ -278,5 +276,5 @@ func NewLogger(w io.Writer, prefix string) *Logger {
 	} else {
 		level = LOG_LEVEL_INFO
 	}
-	return &Logger{_log: log.New(w, prefix, LstdFlags), level: level, highlighting: false}
+	return &Logger{_log: log.New(w, prefix, LstdFlags), level: level, highlighting: true}
 }

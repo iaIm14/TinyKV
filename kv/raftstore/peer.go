@@ -111,7 +111,8 @@ type peer struct {
 	PeersStartPendingTime map[uint64]time.Time
 	// Mark the peer as stopped, set when peer is destroyed
 	// (Used in 3B conf change)
-	stopped bool
+	stopped       bool
+	shouldDestroy bool
 
 	// An inaccurate difference in region size since last reset.
 	// split checker is triggered when it exceeds the threshold, it makes split checker not scan the data very often
@@ -158,6 +159,7 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 		PeersStartPendingTime: make(map[uint64]time.Time),
 		Tag:                   tag,
 		ticker:                newTicker(region.GetId(), cfg),
+		shouldDestroy:         false,
 	}
 
 	// If this region has only one peer and I am the one, campaign directly.
