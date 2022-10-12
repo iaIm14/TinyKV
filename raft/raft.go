@@ -139,7 +139,7 @@ type Raft struct {
 	// baseline of election interval
 	electionTimeout       int
 	electionRandomTimeout int
-	leaderAliveElapased   int
+	// leaderAliveElapased   int
 	// number of ticks since it reached last heartbeatTimeout.
 	// only leader keeps heartbeatElapsed.
 	heartbeatElapsed int
@@ -149,7 +149,7 @@ type Raft struct {
 	electionElapsed int
 
 	leadTransfereeElapsed int
-	Communicate           map[uint64]int
+	// Communicate           map[uint64]int
 	// haveSendedSnapShot    map[uint64]int
 	// leadTransferee is id of the leader transfer target when its value is not zero.
 	// Follow the procedure defined in section 3.10 of Raft phd thesis.
@@ -330,22 +330,22 @@ func (r *Raft) tickForElection() {
 	}
 }
 
-func (r *Raft) tickLeaderAlive() {
-	r.leaderAliveElapased++
-	for i := range r.Communicate {
-		r.Communicate[i]++
-		if r.Communicate[i]*9 >= r.electionTimeout*10 {
-			delete(r.Communicate, i)
-		}
-	}
-	if r.leaderAliveElapased >= r.electionTimeout*2 {
-		r.leaderAliveElapased = 0
-		if len(r.Communicate)*2 < len(r.Prs) {
-			// AliveCheck NotPass
-			r.becomeFollower(r.Term, None)
-		}
-	}
-}
+// func (r *Raft) tickLeaderAlive() {
+// 	r.leaderAliveElapased++
+// 	for i := range r.Communicate {
+// 		r.Communicate[i]++
+// 		if r.Communicate[i]*9 >= r.electionTimeout*10 {
+// 			delete(r.Communicate, i)
+// 		}
+// 	}
+// 	if r.leaderAliveElapased >= r.electionTimeout*2 {
+// 		r.leaderAliveElapased = 0
+// 		if len(r.Communicate)*2 < len(r.Prs) {
+// 			// AliveCheck NotPass
+// 			r.becomeFollower(r.Term, None)
+// 		}
+// 	}
+// }
 
 // tick advances the internal logical clock by a single tick.
 func (r *Raft) tick() {
@@ -361,7 +361,7 @@ func (r *Raft) tick() {
 				r.leadTransferee = None
 			}
 		}
-		r.tickLeaderAlive()
+		// r.tickLeaderAlive()
 		r.heartbeatElapsed++
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
 			r.heartbeatElapsed = 0
@@ -443,7 +443,7 @@ func (r *Raft) becomeLeader() {
 	r.heartbeatElapsed = 0 // easy left
 	// r.leaderAliveElapased = 0
 	// r.haveSendedSnapShot = make(map[uint64]int)
-	r.Communicate = make(map[uint64]int)
+	// r.Communicate = make(map[uint64]int)
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 
 	//---------------
@@ -710,7 +710,7 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 		// log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
 	} else {
 		//debugnote
-		r.Communicate[m.From] = 0
+		// r.Communicate[m.From] = 0
 		if r.Prs[m.From].Match < r.RaftLog.LastIndex() {
 			// log.Infof("Follower %v 's log is out-dated. match %v , leader(%v)'s lastindex=%v", m.From, r.Prs[m.From].Match, r.id, r.RaftLog.LastIndex())
 			// r.Prs[m.From].Match = min(r.Prs[m.From].Match, m.Commit)
@@ -726,7 +726,7 @@ func (r *Raft) handleAppendResponse(m pb.Message) {
 	if m.Term < r.Term {
 		return
 	}
-	r.Communicate[m.From] = 0
+	// r.Communicate[m.From] = 0
 	// delete(r.haveSendedSnapShot, m.From)
 	if m.Reject {
 		// log.Infof("[DEBUG] m.Index & r.prs[from].Next: %v %v", m.Index, r.Prs[m.From].Next)

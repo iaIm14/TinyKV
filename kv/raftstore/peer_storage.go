@@ -396,7 +396,7 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 
 // Save memory states to disk.
 // Do not modify ready in this function, this is a requirement to advance the ready object properly later.
-func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, error) {
+func (ps *PeerStorage) SaveReadyState(ready *raft.Ready, d *peerMsgHandler) (*ApplySnapResult, error) {
 	// // Hint: you may call `Append()` and `ApplySnapshot()` in this function
 	// // Your Code Here (2B/2C).
 	raftWB := new(engine_util.WriteBatch)
@@ -421,7 +421,7 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 		return result, err
 	}
 	raftWB.WriteToDB(ps.Engines.Raft)
-	log.Info(ps.region, " add:", ps.Engines.Raft)
+	log.Info(ps.region, " ", d.storeID(), " add:", ps.Engines.Raft)
 	if err != nil {
 		return result, err
 	}

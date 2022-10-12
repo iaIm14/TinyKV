@@ -2,6 +2,7 @@ package raftstore
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/Connor1996/badger/y"
@@ -177,9 +178,9 @@ func (d *peerMsgHandler) processSplit(entry *eraftpb.Entry, msg *raft_cmdpb.Raft
 		},
 		Peers: newPeers,
 	}
+
 	region.RegionEpoch.Version++
 	region.EndKey = split.SplitKey
-
 	storeMeta := d.ctx.storeMeta
 	storeMeta.Lock()
 	// storeMeta.regionRanges.Delete(&regionItem{region: region})
@@ -472,8 +473,11 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if !d.RaftGroup.HasReady() {
 		return
 	}
+	// if d.RaftGroup.Raft.RaftLog.PendingSnapshot != nil {
+	// 	return
+	// }
 	ready := d.RaftGroup.Ready()
-	regionChange, err := d.peerStorage.SaveReadyState(&ready)
+	regionChange, err := d.peerStorage.SaveReadyState(&ready, d)
 	if err != nil {
 		panic(err)
 	}
@@ -482,15 +486,19 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if !raft.IsEmptySnap(&ready.Snapshot) && regionChange != nil {
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
-		storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
+		// storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
 		storeMeta.regions[regionChange.Region.Id] = regionChange.Region
 		storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 		storeMeta.Unlock()
+		// d.lastAppinyIdx = d.peerStorage.AppliedIndex()
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
 		d.RaftGroup.Advance(ready)
 		return
 	}
+	// if len(ready.CommittedEntries) != 0 {
+	// 	d.lastAppinyIdx = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
+	// }
 	d.Send(d.ctx.trans, ready.Messages)
 	if len(ready.CommittedEntries) != 0 {
 		wb := &engine_util.WriteBatch{}
@@ -551,6 +559,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 }
 
 func (d *peerMsgHandler) handleReadCmd(entry *eraftpb.Entry, msg *raft_cmdpb.RaftCmdRequest) {
+	randint := rand.Intn(100000)
 	for i := range msg.Requests {
 		req := msg.Requests[i]
 		if req.CmdType != raft_cmdpb.CmdType_Get && req.CmdType != raft_cmdpb.CmdType_Snap {
@@ -585,7 +594,7 @@ func (d *peerMsgHandler) handleReadCmd(entry *eraftpb.Entry, msg *raft_cmdpb.Raf
 					},
 				})
 			case raft_cmdpb.CmdType_Snap:
-				log.Info("{Snap:%v}", d.regionId, d.Region())
+				log.Infof("{Snap:%v %v %v}", d.storeID(), d.Region(), randint)
 				resp.Responses = append(resp.Responses, &raft_cmdpb.Response{
 					CmdType: raft_cmdpb.CmdType_Snap,
 					Snap: &raft_cmdpb.SnapResponse{
