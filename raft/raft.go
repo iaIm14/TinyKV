@@ -46,6 +46,7 @@ func (st StateType) String() string {
 	return stmap[uint64(st)]
 }
 
+// [check debug] unused
 // ErrProposalDropped is returned when the proposal is ignored by some cases,
 // so that the proposer can be notified and fail fast.
 var ErrProposalDropped = errors.New("raft proposal dropped")
@@ -237,7 +238,7 @@ func (r *Raft) sendSnapshot(to uint64) bool {
 // sendAppend sends an append RPC with new entries (if any) and the
 // current commit index to the given peer. Returns true if a message was sent.
 func (r *Raft) sendAppend(to uint64) bool {
-	//Your Code Here (2A).
+	// Your Code Here (2A).
 	if r.State != StateLeader {
 		log.Info("[ERROR] sendAppend while r.state!=StateLeader")
 		// return false
@@ -322,7 +323,7 @@ func (r *Raft) tickForElection() {
 		// log.Infof("[DEBUG]++++ tickForElection runs. send MsgHup")
 		r.electionElapsed = 0
 		r.Step(pb.Message{
-			//debuginfo
+			// debuginfo
 			// From:    r.id,
 			// To:      r.id,
 			MsgType: pb.MessageType_MsgHup,
@@ -585,7 +586,6 @@ func (r *Raft) UpdateCommit() bool {
 		}
 
 	}
-
 }
 
 func (r *Raft) raiseElection() {
@@ -672,6 +672,7 @@ func (r *Raft) StepFollower(m pb.Message) error {
 	}
 	return nil
 }
+
 func (r *Raft) StepCandidate(m pb.Message) error {
 	switch m.MsgType {
 	case pb.MessageType_MsgHup:
@@ -703,13 +704,14 @@ func (r *Raft) StepCandidate(m pb.Message) error {
 	}
 	return nil
 }
+
 func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	if m.Term > r.Term {
 		// debug m.From
 		r.becomeFollower(m.Term, m.From)
 		// log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
 	} else {
-		//debugnote
+		// debugnote
 		// r.Communicate[m.From] = 0
 		if r.Prs[m.From].Match < r.RaftLog.LastIndex() {
 			// log.Infof("Follower %v 's log is out-dated. match %v , leader(%v)'s lastindex=%v", m.From, r.Prs[m.From].Match, r.id, r.RaftLog.LastIndex())
@@ -722,6 +724,7 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 		}
 	}
 }
+
 func (r *Raft) handleAppendResponse(m pb.Message) {
 	if m.Term < r.Term {
 		return
@@ -772,6 +775,7 @@ func (r *Raft) sendTimeout(to uint64) {
 	}
 	r.msgs = append(r.msgs, msg)
 }
+
 func (r *Raft) handleTransferLeader(m pb.Message) {
 	// m.from==Transferee
 	if m.From == r.id || r.Prs[m.From] == nil {
@@ -829,6 +833,7 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	}
 	return nil
 }
+
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A)
 	if r.id != None && r.Prs[r.id] == nil && len(r.Prs) != 0 {
@@ -840,7 +845,7 @@ func (r *Raft) Step(m pb.Message) error {
 		// local message
 	case m.Term > r.Term:
 		// log.Infof("%v become Follower because Term diff: m & r.Term: %v %v", r.id, m.Term, r.Term)
-		//debugnote: no valid leader
+		// debugnote: no valid leader
 		r.becomeFollower(m.Term, None)
 	}
 	// log.Info("[DEBUG] INTO 2 Phase.")
@@ -869,7 +874,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	if m.Term != None && m.Term < r.Term {
 		// old leader send old Term's Entry to Append
 		// debug: maybe send back to leader ,(leader->follower->leader)
-		//debuginfo
+		// debuginfo
 		msg.Reject = true
 		msg.Term = uint64(0)
 		msg.Index = uint64(0)
@@ -1117,6 +1122,7 @@ func (r *Raft) SoftState() *SoftState {
 		RaftState: r.State,
 	}
 }
+
 func (r *Raft) HardState() pb.HardState {
 	return pb.HardState{
 		Term:   r.Term,

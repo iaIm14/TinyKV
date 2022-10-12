@@ -47,8 +47,10 @@ const (
 	LOG_LEVEL_ALL   = LOG_LEVEL_DEBUG
 )
 
-const FORMAT_TIME_DAY string = "20060102"
-const FORMAT_TIME_HOUR string = "2006010215"
+const (
+	FORMAT_TIME_DAY  string = "20060102"
+	FORMAT_TIME_HOUR string = "2006010215"
+)
 
 var _log *Logger = New()
 
@@ -64,6 +66,7 @@ func GlobalLogger() *log.Logger {
 func SetLevel(level LogLevel) {
 	_log.SetLevel(level)
 }
+
 func GetLogLevel() LogLevel {
 	return _log.level
 }
@@ -171,7 +174,7 @@ func (l *Logger) logf(t LogType, format string, v ...interface{}) {
 		return
 	}
 
-	logStr, _ := LogTypeToString(t) //logColor
+	logStr, _ := LogTypeToString(t) // logColor
 	var s string
 	if l.highlighting {
 		// s = "\033" + logColor + "m[" + logStr + "] " + fmt.Sprintf(format, v...) + "\033[0m"
@@ -267,7 +270,7 @@ func LogTypeToString(t LogType) (string, string) {
 }
 
 func New() *Logger {
-	file, _ := os.OpenFile("/home/huanggangqi/Desktop/tinykv/output_2.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+	file, _ := os.OpenFile("/home/huanggangqi/Desktop/tinykv/output_2.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o777)
 	return NewLogger(file, "")
 }
 

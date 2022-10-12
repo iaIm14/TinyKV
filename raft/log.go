@@ -114,6 +114,7 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		// log.Info("[ERROR] l.applied >=l.lastIndex")
 		return []pb.Entry{}
 	}
+
 	return l.getEntries(l.applied+1, l.committed+1)
 }
 
