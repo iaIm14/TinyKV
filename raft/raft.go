@@ -187,21 +187,33 @@ func newRaft(c *Config) *Raft {
 	lastIndex := r.RaftLog.LastIndex()
 	hardState, confState, _ := r.RaftLog.storage.InitialState()
 	r.Term, r.Vote, r.RaftLog.committed = hardState.Term, hardState.Vote, hardState.Commit
-	if len(c.peers) != 0 {
-		for _, i := range c.peers {
-			if uint64(i) == r.id {
-				r.Prs[uint64(i)] = &Progress{Match: lastIndex, Next: lastIndex + 1}
-			} else {
-				r.Prs[uint64(i)] = &Progress{Match: 0, Next: lastIndex + 1}
-			}
-		}
-	} else {
-		for _, i := range confState.Nodes {
-			if i == r.id {
-				r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1}
-			} else {
-				r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1}
-			}
+	// Todo: might change regionID when recovery
+	// if len(c.peers) != 0 {
+	// 	for _, i := range c.peers {
+	// 		if uint64(i) == r.id {
+	// 			r.Prs[uint64(i)] = &Progress{Match: lastIndex, Next: lastIndex + 1}
+	// 		} else {
+	// 			r.Prs[uint64(i)] = &Progress{Match: 0, Next: lastIndex + 1}
+	// 		}
+	// 	}
+	// } else {
+	// 	for _, i := range confState.Nodes {
+	// 		if i == r.id {
+	// 			r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1}
+	// 		} else {
+	// 			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1}
+	// 		}
+	// 	}
+	// }
+	peers := c.peers
+	if len(confState.Nodes) != 0 {
+		peers = confState.Nodes
+	}
+	for _, i := range peers {
+		if i == r.id {
+			r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1}
+		} else {
+			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1}
 		}
 	}
 	if c.Applied > 0 {
@@ -240,15 +252,20 @@ func (r *Raft) sendSnapshot(to uint64) bool {
 func (r *Raft) sendAppend(to uint64) bool {
 	// Your Code Here (2A).
 	if r.State != StateLeader {
+		// Todo: can't imagine a legal circumstance
 		log.Info("[ERROR] sendAppend while r.state!=StateLeader")
-		// return false
+		panic(errors.New("sendAppend while r.state!=StateLeader"))
+	}
+	if r.id == to {
+		log.Info("[ERROR] sendAppend to Node itself")
+		panic(errors.New("sendAppend to Node itself"))
 	}
 	prevLogIndex := r.Prs[to].Next - 1
 	if r.Prs[to].Next == 0 {
-		log.Info("[ERROR]Prs[To].Next=0")
-		for i := range r.Prs {
-			log.Infof("id(%v).Next==(%v)", i, r.Prs[i].Next)
-		}
+		log.Info("[ERROR] sendAppend Prs[To].Next=0")
+		// for i := range r.Prs {
+		// 	log.Infof("id(%v).Next==(%v)", i, r.Prs[i].Next)
+		// }
 	}
 	prevLogTerm, err := r.RaftLog.Term(prevLogIndex)
 	if err != nil {
@@ -378,9 +395,11 @@ func (r *Raft) tick() {
 
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
-	r.Term = term
+	if r.Term != term {
+		r.Term = term
+		r.Vote = None
+	}
 	r.Lead = lead
-	r.Vote = None
 	r.State = StateFollower
 	r.votes = make(map[uint64]bool)
 	r.heartbeatElapsed = 0
@@ -388,20 +407,19 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.leadTransferee = None
 	r.leadTransfereeElapsed = 0
 	// r.leaderAliveElapased = 0
-	r.leadTransfereeElapsed = 0
-
+	// Todo: leaderAliveCheck can implement
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
-
-	if len(r.Prs) == 0 {
-		r.Prs[r.id] = &Progress{
-			Match: r.RaftLog.LastIndex(),
-			Next:  r.RaftLog.LastIndex() + 1,
-		}
-		r.Prs[lead] = &Progress{
-			Match: 0,
-			Next:  1,
-		}
-	}
+	// below should be deleted
+	// if len(r.Prs) == 0 {
+	// 	r.Prs[r.id] = &Progress{
+	// 		Match: r.RaftLog.LastIndex(),
+	// 		Next:  r.RaftLog.LastIndex() + 1,
+	// 	}
+	// 	r.Prs[lead] = &Progress{
+	// 		Match: 0,
+	// 		Next:  1,
+	// 	}
+	// }
 	// Your Code Here (2A).
 }
 
@@ -413,15 +431,14 @@ func (r *Raft) becomeCandidate() {
 	r.Vote = r.id
 	r.votes = make(map[uint64]bool)
 	r.votes[r.id] = true
+
 	r.State = StateCandidate
 	r.electionElapsed = 0
 	r.heartbeatElapsed = 0
 	r.leadTransferee = None
 	r.leadTransfereeElapsed = 0
 	// r.leaderAliveElapased = 0
-	r.leadTransfereeElapsed = 0
 	// r.haveSendedSnapShot = make(map[uint64]int)
-
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 	if len(r.Prs) <= 1 {
 		r.becomeLeader()
@@ -435,13 +452,16 @@ func (r *Raft) becomeLeader() {
 	// NOTE: Leader should propose a noop entry on its term
 	// debug Leader->leader no operation?
 	if r.State == StateLeader {
-		// log.Info("[ERROR] leader jump into becomeLeader.")
-		return
+		log.Info("[WARN] becomeLeader node already been leader")
+		panic("becomeLeader node already been leader")
 	}
+
 	r.State = StateLeader
 	r.Lead = r.id
 	r.electionElapsed = 0
-	r.heartbeatElapsed = 0 // easy left
+	r.heartbeatElapsed = 0
+	r.leadTransferee = None
+	r.leadTransfereeElapsed = 0
 	// r.leaderAliveElapased = 0
 	// r.haveSendedSnapShot = make(map[uint64]int)
 	// r.Communicate = make(map[uint64]int)
@@ -843,6 +863,8 @@ func (r *Raft) Step(m pb.Message) error {
 	switch {
 	case m.Term == 0:
 		// local message
+		// note: include MsgTransferLeader
+		// no operation?
 	case m.Term > r.Term:
 		// log.Infof("%v become Follower because Term diff: m & r.Term: %v %v", r.id, m.Term, r.Term)
 		// debugnote: no valid leader
