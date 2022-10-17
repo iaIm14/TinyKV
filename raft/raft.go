@@ -262,57 +262,39 @@ func (r *Raft) sendAppend(to uint64) bool {
 		panic(errors.New("sendAppend to Node itself"))
 	}
 	prevLogIndex := r.Prs[to].Next - 1
-	if r.Prs[to].Next == 0 {
-		log.Info("[ERROR] sendAppend Prs[To].Next=0")
-		// for i := range r.Prs {
-		// 	log.Infof("id(%v).Next==(%v)", i, r.Prs[i].Next)
-		// }
-	}
+	// if r.Prs[to].Next == 0 {
+	// 	log.Info("[ERROR] sendAppend Prs[To].Next=0")
+	// }
 	prevLogTerm, err := r.RaftLog.Term(prevLogIndex)
+	// index->log has been compact. send snapshot.
 	if err != nil {
-		// index->log has been compact. send snapshot.
-		if err == ErrCompacted {
-			log.Info("[DEBUG] send snapshot because leader compact raftlog ")
-			return r.sendSnapshot(to)
+		log.Info("[DEBUG] send snapshot because leader compact raftlog ")
+		return r.sendSnapshot(to)
+	}
+	entriesToSend := make([]*pb.Entry, 0)
+	if r.Prs[to].Next < r.RaftLog.FirstIndex() {
+		panic("sendAppend Next<FirstIndex(), should check when checkSendSnapshot")
+	}
+	lastIndex := r.RaftLog.LastIndex()
+	if r.Prs[to].Next > lastIndex {
+		entriesToSend = nil
+	} else {
+		for i := r.Prs[to].Next - r.RaftLog.FirstIndex(); i < lastIndex-r.RaftLog.FirstIndex()+1; i++ {
+			entriesToSend = append(entriesToSend, &r.RaftLog.entries[i])
 		}
-		// log.Infof("[ERROR] can't find prevLogIndex(%v) in r.raftlog , Should update to send Snapshot", prevLogIndex)
-		return false
 	}
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgAppend,
 		From:    r.Lead,
 		To:      to,
 		Term:    r.Term,
-		Entries: make([]*pb.Entry, 0),
+		Entries: entriesToSend,
 		Commit:  r.RaftLog.committed,
 		Index:   prevLogIndex,
 		LogTerm: prevLogTerm,
 	}
-	lastIndex := r.RaftLog.LastIndex()
-	if lastIndex >= r.Prs[to].Next {
-		for i := r.Prs[to].Next; i <= lastIndex; i++ {
-			if i < r.RaftLog.FirstIndex {
-				// debuginfo
-				continue
-			}
-			entry := &r.RaftLog.entries[i-r.RaftLog.FirstIndex]
-			msg.Entries = append(msg.Entries, entry)
-		}
-		// appEntries = r.RaftLog.getEntries(r.Prs[to].Next, r.RaftLog.LastIndex()+1) //note +1: cannot pass TestLeaderycle2AA
-		// for i := range appEntries {
-		// 	msg.Entries = append(msg.Entries, &appEntries[i])
-		// }
-	} else if lastIndex+1 != r.Prs[to].Next {
-		log.Infof("[ERROR] lastIndex(%v) < peers[%v].Next(%v)", lastIndex, to, r.Prs[to].Next)
-	}
-	// log.Infof("	[DEBUG] Append Entries Msg:%v", msg)
-	if len(msg.Entries) != 0 {
-		// log.Infof("DEBUG: %v==%v sendAppend to %v entries:%v", r.id, r.Lead, msg.To, msg.Entries)
-		r.msgs = append(r.msgs, msg)
-	} else {
-		// log.Infof("DEBUG: %v==%v send emptyAppend to %v ,to update commit: %v", r.id, r.Lead, msg.To, msg.Commit)
-		r.msgs = append(r.msgs, msg)
-	}
+	r.msgs = append(r.msgs, msg)
+	// Note: this part's primary construction is imeffective
 	return true
 }
 
@@ -535,20 +517,26 @@ func (r *Raft) BcastAppend() {
 
 // AppendEntries append entries from ents... to local Raft
 // only Leader uses this function
-func (r *Raft) AppendEntries(entries ...*pb.Entry) {
+func (r *Raft) AppendEntries(entries ...*pb.Entry) error {
 	if r.leadTransferee != None {
-		return
+		return ErrProposalDropped
+	}
+	// Todo when will this happend
+	if _, ok := r.Prs[r.id]; !ok {
+		log.Warn("ERROR: AppendEntries r.id not appear in r.Prs, might change r.id")
+		return ErrProposalDropped
 	}
 	lastIndex := r.RaftLog.LastIndex()
 	for i, v := range entries {
 		v.Index = lastIndex + uint64(i) + 1
 		v.Term = r.Term
+		// Todo(3A conf change)
 		if v.EntryType == pb.EntryType_EntryConfChange {
 			if r.PendingConfIndex != None {
 				// log.Infof("[DEBUG] PendingConfIndex:%v r.raftlog.applied:%v, ent.index:%v", r.PendingConfIndex, r.RaftLog.applied, v.Index)
 				if r.PendingConfIndex > r.RaftLog.applied {
 					v.EntryType = pb.EntryType_EntryNormal
-					v.Data = make([]byte, 0)
+					v.Data = nil
 				}
 			} else {
 				r.PendingConfIndex = v.Index
@@ -557,16 +545,12 @@ func (r *Raft) AppendEntries(entries ...*pb.Entry) {
 		}
 		r.RaftLog.entries = append(r.RaftLog.entries, *v)
 	}
-	// log.Infof("[DEBUG]+ noopEntry: %v; r.id:%v", entries, r.id)
-	// log.Info("[DEBUG]+ prs:")
-	// for i, v := range r.Prs {
-	// 	log.Info("id:", i, " Match:", v.Match, " Next:", v.Next)
-	// }
 	r.Prs[r.id].Match = r.RaftLog.LastIndex()
 	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
 	if len(r.Prs) <= 1 {
 		r.RaftLog.committed = max(r.RaftLog.committed, r.RaftLog.LastIndex())
 	}
+	return nil
 }
 
 // UpdateCommit update raft.committed Leader
@@ -577,16 +561,10 @@ func (r *Raft) UpdateCommit() bool {
 		cntAll++
 		commits = append(commits, v.Match)
 	}
-	// log.Infof("	+++[DEBUG] commits[]:%v", commits)
-	// for i := range r.Prs {
-	// 	log.Infof("Node(%v) Match(%v)", i, r.Prs[i].Match)
-	// }
 	sortkeys.Uint64s(commits)
 	older := r.RaftLog.committed
 	maybeNewCommit := commits[int((cntAll-1)/2)]
 	if older >= maybeNewCommit {
-		// debuginfo >=
-		// log.Info("elder commit & newly commit id is the same. committed: %v", r.RaftLog.committed)
 		return false
 	} else {
 		if maybeNewCommit > r.RaftLog.LastIndex() {
@@ -597,11 +575,9 @@ func (r *Raft) UpdateCommit() bool {
 			return false
 		} else {
 			if maybeNewTerm != r.Term {
-				// log.Info("[DEBUG] different Term when update commit: Try to Commit Entries from earlier Term. r.Term:%v NewTerm:%v", r.Term, maybeNewTerm)
 				return false
 			} else {
 				r.RaftLog.committed = max(r.RaftLog.committed, maybeNewCommit)
-				// log.Infof("	---[DEBUG] update r.raftlog.committed into : %v", r.RaftLog.committed)
 				return true
 			}
 		}
@@ -695,13 +671,11 @@ func (r *Raft) StepFollower(m pb.Message) error {
 
 func (r *Raft) StepCandidate(m pb.Message) error {
 	switch m.MsgType {
+	case pb.MessageType_MsgPropose:
+		return ErrProposalDropped
 	case pb.MessageType_MsgHup:
 		r.raiseElection()
 	case pb.MessageType_MsgAppend:
-		// debuginfo
-		// if m.Term == m.From {
-		// 	r.becomeFollower(m.Term, m.From)
-		// }
 		r.handleAppendEntries(m)
 	case pb.MessageType_MsgRequestVote:
 		r.handleRequestVote(m)
@@ -731,37 +705,20 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 		r.becomeFollower(m.Term, m.From)
 		// log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
 	} else {
-		// debugnote
-		// r.Communicate[m.From] = 0
-		if r.Prs[m.From].Match < r.RaftLog.LastIndex() {
-			// log.Infof("Follower %v 's log is out-dated. match %v , leader(%v)'s lastindex=%v", m.From, r.Prs[m.From].Match, r.id, r.RaftLog.LastIndex())
-			// r.Prs[m.From].Match = min(r.Prs[m.From].Match, m.Commit)
-			// r.Prs[m.From].Next = r.Prs[m.From].Match + 1
-			r.sendAppend(m.From)
-		} else {
-			// log.Infof("Leader receive empty HeartBeatResp from %v", m.From)
-			r.sendAppend(m.From)
-		}
+		r.sendAppend(m.From)
 	}
 }
 
 func (r *Raft) handleAppendResponse(m pb.Message) {
-	if m.Term < r.Term {
-		return
-	}
-	// r.Communicate[m.From] = 0
-	// delete(r.haveSendedSnapShot, m.From)
 	if m.Reject {
-		// log.Infof("[DEBUG] m.Index & r.prs[from].Next: %v %v", m.Index, r.Prs[m.From].Next)
-		// if m.Index == r.Prs[m.From].Next-1 {
-		// if: ignore communication delay messages
+		// Case1: if follower lack some logs
 		nextIndex := m.Index
-		// m.Logterm==None return nextIndex(Peer.lastIndex+1)
+		// Case2: if follower lack some logs and append some other logs
 		if m.LogTerm != None {
 			for i := 0; i < len(r.RaftLog.entries); i++ {
 				if r.RaftLog.entries[i].Term > m.LogTerm {
 					if i > 0 && r.RaftLog.entries[i-1].Term == m.LogTerm {
-						nextIndex = r.RaftLog.FirstIndex + uint64(i)
+						nextIndex = r.RaftLog.FirstIndex() + uint64(i)
 						break
 					}
 				}
@@ -771,7 +728,7 @@ func (r *Raft) handleAppendResponse(m pb.Message) {
 		// log.Infof("[DEBUG] receive MsgAppendResp reject. send again from entries.Index:%v logterm: %v", r.Prs[m.From].Next, m.LogTerm)
 		r.sendAppend(m.From)
 	} else {
-		// log.Infof("leader(%v) index:%v match[%v]:%v", r.id, m.Index, m.From, r.Prs[m.From].Match)
+		// Case3:
 		if m.Index > r.Prs[m.From].Match {
 			// filter
 			r.Prs[m.From].Next = m.Index + 1
@@ -779,9 +736,8 @@ func (r *Raft) handleAppendResponse(m pb.Message) {
 			if r.UpdateCommit() {
 				r.BcastAppend()
 			}
-			if m.Index == r.RaftLog.LastIndex() && r.leadTransferee != None && r.leadTransferee == m.From {
+			if m.Index == r.RaftLog.LastIndex() && r.leadTransferee == m.From {
 				r.sendTimeout(r.leadTransferee)
-				// debuginfo
 			}
 		}
 	}
@@ -841,13 +797,9 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	case pb.MessageType_MsgHeartbeatResponse:
 		r.handleHeartbeatResponse(m)
 	case pb.MessageType_MsgPropose:
-		r.AppendEntries(m.Entries...)
-		// if len(r.RaftLog.entries) > 10 {
-		// log.Infof("%v==%v propose msg :%v lastIndex:%v last ten raftlog entries:%v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[len(r.RaftLog.entries)-10:])
-		// } else {
-		// log.Infof("%v==%v propose msg :%v lastIndex:%v all raftlog entries: %v", r.id, r.Lead, m.Entries, r.RaftLog.LastIndex(), r.RaftLog.entries[0:])
-		// }
+		err := r.AppendEntries(m.Entries...)
 		r.BcastAppend()
+		return err
 	case pb.MessageType_MsgHup:
 		// log.Info("[ERROR] Leader receive local MsgHup")
 	case pb.MessageType_MsgRequestVote:
@@ -876,15 +828,10 @@ func (r *Raft) Step(m pb.Message) error {
 	case m.Term == 0:
 		// local message
 		// note: include MsgTransferLeader
-		// no operation?
 	case m.Term > r.Term:
-		// log.Infof("%v become Follower because Term diff: m & r.Term: %v %v", r.id, m.Term, r.Term)
-		// debugnote: no valid leader
 		r.becomeFollower(m.Term, None)
-		// NOTE:
-		// this should be an error.
-		// every type of scaled Msg could be received. they should not be dealt with.
 	case m.Term < r.Term:
+		// NOTE: every type of scaled Msg could be received. they should not be dealt with.
 		switch m.MsgType {
 		case pb.MessageType_MsgRequestVote:
 		case pb.MessageType_MsgHeartbeat:
@@ -894,40 +841,21 @@ func (r *Raft) Step(m pb.Message) error {
 			return nil
 		}
 	}
-	// log.Info("[DEBUG] INTO 2 Phase.")
 	switch r.State {
 	case StateFollower:
-		r.StepFollower(m)
+		return r.StepFollower(m)
 	case StateCandidate:
-		r.StepCandidate(m)
+		return r.StepCandidate(m)
 	case StateLeader:
-		r.StepLeader(m)
+		return r.StepLeader(m)
+	default:
+		return nil
 	}
-	return nil
 }
 
 // handleAppendEntries handle AppendEntries RPC request. Type: MessageType_MsgAppend
 func (r *Raft) handleAppendEntries(m pb.Message) {
 	// Your Code Here (2A)
-	// there should not have MsgAppend which m.Term == None
-	if m.Term == None {
-		log.Warn("WARN: handleAppendEntries m.Term == None")
-		panic(errors.New("handleAppendEntries m.Term == None"))
-	}
-	// given m.Index==Leader's PrevLogIndex >= Leader's committed Index >= Follower's committed Index >= applied Index
-	if m.Index < r.RaftLog.committed {
-		log.Panic("ERROR: handleAppendEntries m.Index < r.RaftLog.committed, this was allowed in raft_paper_test, so didn't panic here")
-	}
-	if m.Index < r.RaftLog.applied {
-		log.Info("ERROR: Follower's Raftlog appliedIndex > Leader's PrevLogIndex")
-		panic(errors.New(" Follower's Raftlog appliedIndex > Leader's PrevLogIndex"))
-	}
-	// 'if' should be [if m.index >= r.RaftLog.FirstIndex-1], forgot -1
-	if m.Index < r.RaftLog.FirstIndex-1 {
-		log.Info("ERROR: handleAppendEntries try to append Entries which have been apply and compact")
-		panic(fmt.Sprintf("handleAppendEntries try to append Entries which have been apply and compact %v %v", m.Index, r.RaftLog.FirstIndex))
-	}
-
 	msg := pb.Message{
 		From:    r.id,
 		To:      m.From,
@@ -935,6 +863,14 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		Reject:  false,
 		Term:    r.Term,
 		Index:   m.Index,
+	}
+	// there should not have MsgAppend which m.Term == None
+	if m.Term == None {
+		log.Warn("WARN: handleAppendEntries m.Term == None")
+		panic(errors.New("handleAppendEntries m.Term == None"))
+	}
+	if StateCandidate == r.State {
+		r.becomeFollower(m.Term, m.From)
 	}
 	if m.Term < r.Term {
 		// old leader send old Term's Entry to Append
@@ -944,10 +880,6 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		r.msgs = append(r.msgs, msg)
 		return
 	} else if m.Term > r.Term {
-		r.becomeFollower(m.Term, m.From)
-	}
-	// Note: candidate can append without change to follower
-	if r.State == StateCandidate {
 		r.becomeFollower(m.Term, m.From)
 	}
 	r.electionElapsed = 0
@@ -975,7 +907,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	if localPrevLogTerm != m.LogTerm {
 		msg.Reject = true
 		retLogIndex, retLogTerm := m.Index+1, localPrevLogTerm
-		for i := 0; i <= int(m.Index-r.RaftLog.FirstIndex); i++ {
+		for i := 0; i <= int(m.Index-r.RaftLog.FirstIndex()); i++ {
 			if r.RaftLog.entries[i].Term == localPrevLogTerm {
 				retLogIndex = r.RaftLog.entries[i].Index
 				break
@@ -991,71 +923,40 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 			r.RaftLog.entries = append(r.RaftLog.entries, *m.Entries[i])
 		}
 	} else {
-	}
-	var entries []*pb.Entry
-	conflict := false
-	for i, entry := range m.Entries {
-		if entry.Index < r.RaftLog.FirstIndex {
-			continue
-		}
-		if entry.Index > r.RaftLog.LastIndex() {
-			entries = append(entries, m.Entries[i:]...)
-			break
-		}
-		// index&Term not match in situation [entry.index>=firstIndex]
-		// m.entries[0].Index==m.index+1 (consistency check)
-		t, err := r.RaftLog.Term(entry.Index)
-		if err != nil {
-			// raftlog.term() ensures this not hapend.
-			log.Info("[ERROR] Msg.Entries[i].Index search Term error.")
-			return
-		}
-		if t != entry.Term {
-			conflict = true
-		}
-		if conflict {
-			entries = append(entries, entry)
-		}
-	}
-	// r.RaftLog.BaseAppendEntries(entries...)
-	// log.Infof("[DEBUG+] %v", entries)
-	if len(entries) != 0 {
-		for i := range entries {
-			entry := entries[i]
-			idx, term := entry.Index, entry.Term
-			if idx > r.RaftLog.LastIndex() {
-				for j := range entries[i:] {
-					r.RaftLog.entries = append(r.RaftLog.entries, *entries[j])
+		// NOTE: if local entries have more log than m.entries, [m.entries.last,local.entries.last] will not be truncated.
+		for i, ent := range m.Entries {
+			localTerm, err := r.RaftLog.Term(ent.Index)
+			if err != nil || localTerm != ent.Term {
+				// given TruncateIndex should >= Leader's committed Index >= Follower's committed Index >= applied Index
+				if ent.Index < r.RaftLog.committed {
+					log.Error("ERROR: handleAppendEntries m.Index < r.RaftLog.committed")
+					panic("handleAppendEntries m.Index < r.RaftLog.committed")
 				}
-				r.RaftLog.stabled = min(r.RaftLog.stabled, entries[0].Index-1)
-				break
-			}
-			t, err := r.RaftLog.Term(idx)
-			if err != nil {
-				panic(err)
-			}
-			if t != term {
-				r.RaftLog.entries = r.RaftLog.entries[:idx-r.RaftLog.FirstIndex]
-				for j := range entries[i:] {
-					r.RaftLog.entries = append(r.RaftLog.entries, *entries[j])
+				if ent.Index < r.RaftLog.applied {
+					log.Info("ERROR: Follower's Raftlog appliedIndex > Leader's PrevLogIndex")
+					panic(errors.New(" Follower's Raftlog appliedIndex > Leader's PrevLogIndex"))
 				}
-				r.RaftLog.stabled = min(r.RaftLog.stabled, entries[0].Index-1)
+				// 'if' should be [if m.index >= r.RaftLog.FirstIndex()-1], forgot -1
+				if ent.Index < r.RaftLog.FirstIndex()-1 {
+					log.Info("ERROR: handleAppendEntries try to append Entries which have been apply and compact")
+					panic(fmt.Sprintf("handleAppendEntries try to append Entries which have been apply and compact %v %v", m.Index, r.RaftLog.FirstIndex()))
+				}
+				r.RaftLog.stabled = min(r.RaftLog.stabled, ent.Index-1)
+				r.RaftLog.entries = r.RaftLog.entries[:ent.Index-r.RaftLog.FirstIndex()]
+				for j := i; j < len(m.Entries); j++ {
+					r.RaftLog.entries = append(r.RaftLog.entries, *m.Entries[j])
+				}
 				break
 			}
 		}
 	}
 	msg.Index = r.RaftLog.LastIndex()
-	// MsgAppend: update r.RaftLog.committed
+	// MsgAppend: update r.RaftLog.committed according m.Commit
 	if r.RaftLog.committed < m.Commit {
 		lastNewIndex := uint64(len(m.Entries)) + m.Index
 		r.RaftLog.committed = min(m.Commit, lastNewIndex)
 	}
 	r.msgs = append(r.msgs, msg)
-	// if 0 > len(r.RaftLog.entries)-10 {
-	// 	log.Infof("DEBUG3: %v AppendEntries: %v m.index=%v", r.id, r.RaftLog.entries[0:], m.Index)
-	// } else {
-	// 	log.Infof("DEBUG3: %v last ten AppendEntries: %v, m.index=%v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):], m.Index)
-	// }
 }
 
 // handleHeartbeat handle Heartbeat RPC request
@@ -1093,7 +994,6 @@ func (r *Raft) restoreSnapshot(snapshot *pb.Snapshot) {
 	if len(r.RaftLog.entries) > 0 {
 		r.RaftLog.entries = nil
 	}
-	r.RaftLog.FirstIndex = firstIndex
 	r.RaftLog.applied = firstIndex - 1
 	r.RaftLog.committed = firstIndex - 1
 	r.RaftLog.stabled = firstIndex - 1

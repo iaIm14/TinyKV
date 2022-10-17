@@ -55,8 +55,6 @@ type RaftLog struct {
 	PendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
-	// first entry in Raftlog.entries 's Index ==FirstIndex
-	FirstIndex uint64
 }
 
 // newLog returns log using the given storage. It recovers the log
@@ -80,7 +78,7 @@ func newLog(storage Storage) *RaftLog {
 	ret.stabled = lastIndex
 	// 当前第一条还没有被合并到快照中的LogIndex
 	// 更新时机: RaftStorage 写入的时候
-	ret.FirstIndex = firstIndex
+	// ret.FirstIndex = firstIndex
 	ret.PendingSnapshot = nil
 	return ret
 }
@@ -108,18 +106,18 @@ func (l *RaftLog) maybeCompact() {
 	// 	}
 	// 	l.FirstIndex = firstIndex
 	// }
-	if firstIndex > l.FirstIndex {
+	if firstIndex > l.FirstIndex() {
 		// TODO : is it possible? when node restart , might append a noop entry.
 		if len(l.entries) == 0 {
-			log.Info("WARN: RaftLog have no entries")
-			l.FirstIndex = firstIndex
-			return
+			// log.Info("WARN: RaftLog have no entries")
+			// l.FirstIndex = firstIndex
+			// return
 		} else {
 			if firstIndex > l.entries[len(l.entries)-1].Index {
 				l.entries = []pb.Entry{}
 				return
 			} else {
-				l.entries = l.entries[firstIndex-l.FirstIndex:]
+				l.entries = l.entries[firstIndex-l.FirstIndex():]
 				return
 			}
 		}
@@ -137,16 +135,16 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 	// 	log.Error("[ERROR] unstableEntries l.stabled < l.committed.")
 	// 	panic(errors.New("unstableEntries l.stabled < l.committed"))
 	// }
-	// if l.stabled < l.FirstIndex {
-	// 	log.Error("[ERROR] unstableEntries l.stabled < l.FirstIndex.")
-	// 	panic(errors.New("unstableEntries l.stabled < l.FirstIndex"))
+	// if l.stabled < l.FirstIndex() {
+	// 	log.Error("[ERROR] unstableEntries l.stabled < l.FirstIndex().")
+	// 	panic(errors.New("unstableEntries l.stabled < l.FirstIndex()"))
 	// }
 	if l.stabled > l.LastIndex() {
 		log.Error("[ERROR] unstableEntries l.stabled >=l.lastIndex.")
 		panic(errors.New("unstableEntries l.stabled >=l.lastIndex"))
 		// return []pb.Entry{}
 	}
-	return l.entries[l.stabled+1-l.FirstIndex:]
+	return l.entries[l.stabled+1-l.FirstIndex():]
 }
 
 // nextEnts returns all the committed but not applied entries
@@ -160,12 +158,20 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		return nil
 		// debug info : return []pb.Entry{}
 	}
-	return l.entries[l.applied+1-l.FirstIndex : l.committed+1-l.FirstIndex]
+	return l.entries[l.applied+1-l.FirstIndex() : l.committed+1-l.FirstIndex()]
 }
 
 // getEntries return all Entry Index between [lo,ro)
 func (l *RaftLog) getEntries(lo, ro uint64) (ents []pb.Entry) {
-	return l.entries[lo-l.FirstIndex : ro-l.FirstIndex]
+	return l.entries[lo-l.FirstIndex() : ro-l.FirstIndex()]
+}
+
+//  FirstIndex == raftlog.entries[0].index or 0
+func (l *RaftLog) FirstIndex() uint64 {
+	if len(l.entries) == 0 {
+		return 0
+	}
+	return l.entries[0].Index
 }
 
 // LastIndex return the last index of the log entries
@@ -185,16 +191,6 @@ func (l *RaftLog) LastIndex() uint64 {
 	if err != nil {
 		storageIndex = 0
 	}
-	// if pendingSnapshotIndex >= raftlogIndex && pendingSnapshotIndex >= storageIndex {
-	// 	log.Info("lastindex return pendingSnapshotIndex")
-	// 	return pendingSnapshotIndex
-	// } else if raftlogIndex >= pendingSnapshotIndex && raftlogIndex >= storageIndex {
-	// 	log.Info("lastindex return raftlogIndex")
-	// 	return raftlogIndex
-	// } else {
-	// 	log.Info("lastindex return storageIndex")
-	// 	return storageIndex
-	// }
 	if raftlogIndex != 0 {
 		log.Info("lastindex return raftlogIndex")
 		return raftlogIndex
@@ -213,15 +209,18 @@ func (l *RaftLog) LastIndex() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-	if len(l.entries) > 0 && i >= l.FirstIndex {
+	if len(l.entries) > 0 && i >= l.FirstIndex() {
 		if i > l.entries[len(l.entries)-1].Index {
 			log.Info("[ERROR] Term() i>=raftlog.entries[last].index")
-			panic(errors.New("Term() i>=raftlog.entries[last].index"))
+		} else {
+			return l.entries[i-l.FirstIndex()].Term, nil
 		}
-		return l.entries[i-l.FirstIndex].Term, nil
 	}
-	// i not in memory, should search in storage
+	// i not in Raftlog.entries, should search in storage
+	// if >lastIndex or <FirstIndex() will return 0,ErrUnavailable(MemoryStorage)
+	// to pass test, should let it return
 	term, err := l.storage.Term(i)
+
 	if err != nil && !IsEmptySnap(l.PendingSnapshot) {
 		if err != ErrUnavailable {
 			log.Info("[WARN] storage.Term return err but not ErrUnavailable")
@@ -243,33 +242,4 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 func (l *RaftLog) LastTerm() (uint64, error) {
 	lastIndex := l.LastIndex()
 	return l.Term(lastIndex)
-}
-
-// BaseAppendEntries Follower append entries, maybe conflict
-// base on etcd: func (*unstable) truncateAndAppend()
-// unused
-func (l *RaftLog) TruncateAndAppend(entries ...*pb.Entry) {
-	if len(entries) == 0 {
-		return
-	}
-	prevIndex := entries[0].Index - 1
-	switch {
-	case prevIndex == l.FirstIndex+uint64(len(l.entries))-1:
-		for _, v := range entries {
-			l.entries = append(l.entries, *v)
-		}
-	case prevIndex < l.FirstIndex:
-		l.stabled = min(l.stabled, prevIndex)
-		l.FirstIndex = prevIndex + 1
-		l.entries = []pb.Entry{}
-		for _, v := range entries {
-			l.entries = append(l.entries, *v)
-		}
-	default:
-		l.stabled = min(prevIndex, l.stabled)
-		l.entries = append([]pb.Entry{}, l.getEntries(l.FirstIndex, prevIndex+1)...)
-		for _, v := range entries {
-			l.entries = append(l.entries, *v)
-		}
-	}
 }
