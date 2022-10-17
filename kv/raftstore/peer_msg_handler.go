@@ -42,6 +42,7 @@ func newPeerMsgHandler(peer *peer, ctx *GlobalContext) *peerMsgHandler {
 		ctx:  ctx,
 	}
 }
+
 func (d *peerMsgHandler) handleProposal(entry *eraftpb.Entry, handle func(*proposal)) {
 	for len(d.proposals) > 0 {
 		p := d.proposals[0]
@@ -74,7 +75,7 @@ func (d *peerMsgHandler) processRequest(entry *eraftpb.Entry, msg *raft_cmdpb.Ra
 	req := msg.Requests
 	for i := range req {
 		request := req[i]
-		//apply to KV *badger.DB
+		// apply to KV *badger.DB
 		switch request.CmdType {
 		case raft_cmdpb.CmdType_Delete:
 			key := request.Delete.GetKey()
@@ -122,6 +123,7 @@ func (d *peerMsgHandler) processRequest(entry *eraftpb.Entry, msg *raft_cmdpb.Ra
 		p.cb.Done(resp)
 	})
 }
+
 func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmdpb.RaftCmdRequest, wb *engine_util.WriteBatch) *engine_util.WriteBatch {
 	req := msg.AdminRequest
 	switch req.CmdType {
@@ -345,6 +347,7 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, wb *engine_util.WriteBatc
 	}
 	return wb
 }
+
 func (d *peerMsgHandler) checkReadCommand(msg *raft_cmdpb.RaftCmdRequest, entry *eraftpb.Entry) (bool, error) {
 	readonly := true
 	if msg.AdminRequest != nil {
@@ -777,6 +780,7 @@ func (d *peerMsgHandler) proposeRequest(msg *raft_cmdpb.RaftCmdRequest, cb *mess
 		d.readProposals = append(d.readProposals, proposal)
 	}
 }
+
 func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	err := d.preProposeRaftCommand(msg)
 	if err != nil {
@@ -949,7 +953,8 @@ func (d *peerMsgHandler) checkMessage(msg *rspb.RaftMessage) bool {
 }
 
 func handleStaleMsg(trans Transport, msg *rspb.RaftMessage, curEpoch *metapb.RegionEpoch,
-	needGC bool) {
+	needGC bool,
+) {
 	regionID := msg.RegionId
 	fromPeer := msg.FromPeer
 	toPeer := msg.ToPeer

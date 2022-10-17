@@ -132,18 +132,19 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 	if len(l.entries) == 0 {
 		return nil
 	}
-	if l.stabled < l.committed {
-		log.Error("[ERROR] unstableEntries l.stabled < l.committed.")
-		panic(errors.New("unstableEntries l.stabled < l.committed"))
-	}
+	// NOTE: Need Fix. stabled will update in ready(RawNode module), not in Raft module
+	// if l.stabled < l.committed {
+	// 	log.Error("[ERROR] unstableEntries l.stabled < l.committed.")
+	// 	panic(errors.New("unstableEntries l.stabled < l.committed"))
+	// }
+	// if l.stabled < l.FirstIndex {
+	// 	log.Error("[ERROR] unstableEntries l.stabled < l.FirstIndex.")
+	// 	panic(errors.New("unstableEntries l.stabled < l.FirstIndex"))
+	// }
 	if l.stabled > l.LastIndex() {
 		log.Error("[ERROR] unstableEntries l.stabled >=l.lastIndex.")
 		panic(errors.New("unstableEntries l.stabled >=l.lastIndex"))
 		// return []pb.Entry{}
-	}
-	if l.stabled < l.FirstIndex {
-		log.Error("[ERROR] unstableEntries l.stabled < l.FirstIndex.")
-		panic(errors.New("unstableEntries l.stabled < l.FirstIndex"))
 	}
 	return l.entries[l.stabled+1-l.FirstIndex:]
 }
@@ -184,15 +185,28 @@ func (l *RaftLog) LastIndex() uint64 {
 	if err != nil {
 		storageIndex = 0
 	}
-	if pendingSnapshotIndex >= raftlogIndex && pendingSnapshotIndex >= storageIndex {
-		log.Info("lastindex return pendingSnapshotIndex")
-		return pendingSnapshotIndex
-	} else if raftlogIndex >= pendingSnapshotIndex && raftlogIndex >= storageIndex {
+	// if pendingSnapshotIndex >= raftlogIndex && pendingSnapshotIndex >= storageIndex {
+	// 	log.Info("lastindex return pendingSnapshotIndex")
+	// 	return pendingSnapshotIndex
+	// } else if raftlogIndex >= pendingSnapshotIndex && raftlogIndex >= storageIndex {
+	// 	log.Info("lastindex return raftlogIndex")
+	// 	return raftlogIndex
+	// } else {
+	// 	log.Info("lastindex return storageIndex")
+	// 	return storageIndex
+	// }
+	if raftlogIndex != 0 {
 		log.Info("lastindex return raftlogIndex")
 		return raftlogIndex
-	} else {
+	} else if pendingSnapshotIndex != 0 {
+		log.Info("lastindex return pendingSnapshotIndex")
+		return pendingSnapshotIndex
+	} else if storageIndex != 0 {
 		log.Info("lastindex return storageIndex")
 		return storageIndex
+	} else {
+		log.Info("WARN: lastindex return 0")
+		return 0
 	}
 }
 

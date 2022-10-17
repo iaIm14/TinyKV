@@ -16,6 +16,7 @@ package raft
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 
 	"github.com/pingcap-incubator/tinykv/log"
@@ -451,10 +452,10 @@ func (r *Raft) becomeLeader() {
 	// Your Code Here (2A).
 	// NOTE: Leader should propose a noop entry on its term
 	// debug Leader->leader no operation?
-	if r.State == StateLeader {
-		log.Info("[WARN] becomeLeader node already been leader")
-		panic("becomeLeader node already been leader")
-	}
+	// if r.State == StateLeader {
+	// 	log.Info("[WARN] becomeLeader node already been leader")
+	// 	panic("becomeLeader node already been leader")
+	// }
 
 	r.State = StateLeader
 	r.Lead = r.id
@@ -610,11 +611,7 @@ func (r *Raft) UpdateCommit() bool {
 
 func (r *Raft) raiseElection() {
 	r.becomeCandidate()
-	r.heartbeatElapsed = 0
-	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
-	if len(r.Prs) <= 1 {
-		r.becomeLeader()
-	}
+	// duplicate call becomeLeader when len(r.Prs)<=1
 	// note logterm&Index in MessageSend
 	lastLogIndex := r.RaftLog.LastIndex()
 	lastLogTerm, _ := r.RaftLog.LastTerm()
@@ -665,6 +662,9 @@ func (r *Raft) handleRequestVoteResponse(m pb.Message) {
 // on `eraftpb.proto` for what msgs should be handled
 func (r *Raft) StepFollower(m pb.Message) error {
 	switch m.MsgType {
+	case pb.MessageType_MsgPropose:
+		// when Follower Receive a Propose Msg
+		return ErrProposalDropped
 	case pb.MessageType_MsgHup:
 		r.raiseElection()
 	case pb.MessageType_MsgAppend:
@@ -825,7 +825,19 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	case pb.MessageType_MsgBeat:
 		r.BcastHeartBeat(m)
 	case pb.MessageType_MsgAppend:
-		r.handleAppendEntries(m)
+		// if m.Term > r.Term , should becomeFollower and then handle Msg in StepFollower
+		// if m.Term < r.Term , should send Reject
+		// m.Term == r.Term should never happend
+		// all in all, Leader should NOT append entries
+		if m.Term > r.Term {
+			r.becomeFollower(m.Term, m.From)
+		} else if m.Term < r.Term {
+			// might set From == None
+			r.msgs = append(r.msgs, pb.Message{MsgType: pb.MessageType_MsgAppendResponse, To: m.From, From: r.id, Term: r.Term, Reject: true})
+		} else {
+			log.Error("Error: Leader receive MsgAppend with the same Term, might have two Leader with the same Term.")
+			panic(errors.New(" Leader receive MsgAppend with the same Term, might have two Leader with the same Term"))
+		}
 	case pb.MessageType_MsgHeartbeatResponse:
 		r.handleHeartbeatResponse(m)
 	case pb.MessageType_MsgPropose:
@@ -869,6 +881,18 @@ func (r *Raft) Step(m pb.Message) error {
 		// log.Infof("%v become Follower because Term diff: m & r.Term: %v %v", r.id, m.Term, r.Term)
 		// debugnote: no valid leader
 		r.becomeFollower(m.Term, None)
+		// NOTE:
+		// this should be an error.
+		// every type of scaled Msg could be received. they should not be dealt with.
+	case m.Term < r.Term:
+		switch m.MsgType {
+		case pb.MessageType_MsgRequestVote:
+		case pb.MessageType_MsgHeartbeat:
+		case pb.MessageType_MsgAppend:
+		case pb.MessageType_MsgSnapshot:
+		default:
+			return nil
+		}
 	}
 	// log.Info("[DEBUG] INTO 2 Phase.")
 	switch r.State {
@@ -885,6 +909,25 @@ func (r *Raft) Step(m pb.Message) error {
 // handleAppendEntries handle AppendEntries RPC request. Type: MessageType_MsgAppend
 func (r *Raft) handleAppendEntries(m pb.Message) {
 	// Your Code Here (2A)
+	// there should not have MsgAppend which m.Term == None
+	if m.Term == None {
+		log.Warn("WARN: handleAppendEntries m.Term == None")
+		panic(errors.New("handleAppendEntries m.Term == None"))
+	}
+	// given m.Index==Leader's PrevLogIndex >= Leader's committed Index >= Follower's committed Index >= applied Index
+	if m.Index < r.RaftLog.committed {
+		log.Panic("ERROR: handleAppendEntries m.Index < r.RaftLog.committed, this was allowed in raft_paper_test, so didn't panic here")
+	}
+	if m.Index < r.RaftLog.applied {
+		log.Info("ERROR: Follower's Raftlog appliedIndex > Leader's PrevLogIndex")
+		panic(errors.New(" Follower's Raftlog appliedIndex > Leader's PrevLogIndex"))
+	}
+	// 'if' should be [if m.index >= r.RaftLog.FirstIndex-1], forgot -1
+	if m.Index < r.RaftLog.FirstIndex-1 {
+		log.Info("ERROR: handleAppendEntries try to append Entries which have been apply and compact")
+		panic(fmt.Sprintf("handleAppendEntries try to append Entries which have been apply and compact %v %v", m.Index, r.RaftLog.FirstIndex))
+	}
+
 	msg := pb.Message{
 		From:    r.id,
 		To:      m.From,
@@ -893,65 +936,61 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		Term:    r.Term,
 		Index:   m.Index,
 	}
-	if m.Term != None && m.Term < r.Term {
+	if m.Term < r.Term {
 		// old leader send old Term's Entry to Append
-		// debug: maybe send back to leader ,(leader->follower->leader)
-		// debuginfo
 		msg.Reject = true
 		msg.Term = uint64(0)
 		msg.Index = uint64(0)
 		r.msgs = append(r.msgs, msg)
 		return
+	} else if m.Term > r.Term {
+		r.becomeFollower(m.Term, m.From)
 	}
+	// Note: candidate can append without change to follower
+	if r.State == StateCandidate {
+		r.becomeFollower(m.Term, m.From)
+	}
+	r.electionElapsed = 0
+	r.Lead = m.From
+
+	// Case3: Follower doesn't have Leader's Log(m.Index==Leader's PrevLogIndex, >local's LastIndex)
+	// should resend from LastIndex+1
 	if m.Index > r.RaftLog.LastIndex() {
 		msg.Reject = true
 		msg.Index = r.RaftLog.LastIndex() + 1
 		msg.LogTerm = None
 		r.msgs = append(r.msgs, msg)
-		// if 0 > len(r.RaftLog.entries)-10 {
-		// 	log.Infof("DEBUG1: %v AppendEntries: %v", r.id, r.RaftLog.entries[0:])
-		// } else {
-		// 	log.Infof("DEBUG1: %v last ten AppendEntries: %v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):])
-		// }
 		return
 	}
-	// situation: m.Term>r.Term
-	// handleHeartbeat :make sure Term same
-	r.electionElapsed = 0
-	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
-	r.Lead = m.From
-	r.Term, msg.Term = m.Term, m.Term
-	if r.State == StateCandidate || r.State == StateLeader {
-		r.becomeFollower(m.Term, m.From)
+
+	// this overlap with Case3, should not happend
+	localPrevLogTerm, err := r.RaftLog.Term(m.Index)
+	if err != nil {
+		log.Info("ERROR: handleAppendEntries call Raftlog.term(prevLogIndex) can't find and return err")
+		panic("handleAppendEntries call Raftlog.term(prevLogIndex) can't find and return err")
 	}
-	// ---------------check Term&Index------
-	if m.Index >= r.RaftLog.FirstIndex {
-		// log.Infof("[DEBUG]+++ %v %v", m.Index, r.RaftLog.FirstIndex)
-		t, err := r.RaftLog.Term(m.Index)
-		if err != nil {
-			log.Info("[ERROR] return err!=nil .Term() should not hapend")
-			msg.Reject = true
-			r.msgs = append(r.msgs, msg)
-			return
-		}
-		if t != m.LogTerm {
-			msg.Reject = true
-			retLogIndex, retLogTerm := m.Index+1, t
-			for i := 0; i <= int(m.Index-r.RaftLog.FirstIndex); i++ {
-				if r.RaftLog.entries[i].Term == t {
-					retLogIndex = r.RaftLog.entries[i].Index
-					break
-				}
+	// Case2: Follower have other Term's Log (conflict)
+	// should return localPrevLogTerm's first Log's Index&Term
+	// search in r.RaftLog.entries
+	if localPrevLogTerm != m.LogTerm {
+		msg.Reject = true
+		retLogIndex, retLogTerm := m.Index+1, localPrevLogTerm
+		for i := 0; i <= int(m.Index-r.RaftLog.FirstIndex); i++ {
+			if r.RaftLog.entries[i].Term == localPrevLogTerm {
+				retLogIndex = r.RaftLog.entries[i].Index
+				break
 			}
-			msg.LogTerm, msg.Index = retLogTerm, retLogIndex
-			r.msgs = append(r.msgs, msg)
-			// if 0 > len(r.RaftLog.entries)-10 {
-			// 	log.Infof("DEBUG2: %v AppendEntries: %v", r.id, r.RaftLog.entries[0:])
-			// } else {
-			// 	log.Infof("DEBUG2: %v last ten AppendEntries: %v", r.id, r.RaftLog.entries[uint(len(r.RaftLog.entries)-10):])
-			// }
-			return
 		}
+		msg.LogTerm, msg.Index = retLogTerm, retLogIndex
+		r.msgs = append(r.msgs, msg)
+		return
+	}
+
+	if len(r.RaftLog.entries) == 0 {
+		for i := 0; i < len(m.Entries); i++ {
+			r.RaftLog.entries = append(r.RaftLog.entries, *m.Entries[i])
+		}
+	} else {
 	}
 	var entries []*pb.Entry
 	conflict := false
