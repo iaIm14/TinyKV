@@ -110,6 +110,9 @@ func (c *Config) validate() error {
 // progresses of all followers, and sends entries to the follower based on its progress.
 type Progress struct {
 	Match, Next uint64
+	// [1,2,3,4][5] & 5 is leader, 1,2,3,4 will raiseElection& elect a new leader, which will cause
+	// add checkQuorum
+	recentAlive bool
 }
 
 type Raft struct {
@@ -141,7 +144,7 @@ type Raft struct {
 	// baseline of election interval
 	electionTimeout       int
 	electionRandomTimeout int
-	// leaderAliveElapased   int
+
 	// number of ticks since it reached last heartbeatTimeout.
 	// only leader keeps heartbeatElapsed.
 	heartbeatElapsed int
@@ -189,32 +192,16 @@ func newRaft(c *Config) *Raft {
 	hardState, confState, _ := r.RaftLog.storage.InitialState()
 	r.Term, r.Vote, r.RaftLog.committed = hardState.Term, hardState.Vote, hardState.Commit
 	// Todo: might change regionID when recovery
-	// if len(c.peers) != 0 {
-	// 	for _, i := range c.peers {
-	// 		if uint64(i) == r.id {
-	// 			r.Prs[uint64(i)] = &Progress{Match: lastIndex, Next: lastIndex + 1}
-	// 		} else {
-	// 			r.Prs[uint64(i)] = &Progress{Match: 0, Next: lastIndex + 1}
-	// 		}
-	// 	}
-	// } else {
-	// 	for _, i := range confState.Nodes {
-	// 		if i == r.id {
-	// 			r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1}
-	// 		} else {
-	// 			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1}
-	// 		}
-	// 	}
-	// }
+
 	peers := c.peers
 	if len(confState.Nodes) != 0 {
 		peers = confState.Nodes
 	}
 	for _, i := range peers {
 		if i == r.id {
-			r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1}
+			r.Prs[i] = &Progress{Match: lastIndex, Next: lastIndex + 1, recentAlive: true}
 		} else {
-			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1}
+			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1, recentAlive: true}
 		}
 	}
 	if c.Applied > 0 {
@@ -315,19 +302,15 @@ func (r *Raft) sendHeartbeat(to uint64) {
 // tickForElection Follower and Candidate tick handler
 func (r *Raft) tickForElection() {
 	// log.Info("tickForElection(). tick info: r.electionElapsed: %v ; r.electionRandomTimeout %v;r.electionTimeout %v;", r.electionElapsed, r.electionRandomTimeout, r.electionTimeout)
-	if r.Term == 0 && len(r.Prs) == 0 {
-		return
-	}
+	// if r.Term == 0 && len(r.Prs) == 0 {
+	// 	return
+	// }
 	r.electionElapsed++
 	if r.electionRandomTimeout <= r.electionElapsed {
-		// log.Infof("[DEBUG]++++ tickForElection runs. send MsgHup")
 		r.electionElapsed = 0
-		r.Step(pb.Message{
-			// debuginfo
-			// From:    r.id,
-			// To:      r.id,
-			MsgType: pb.MessageType_MsgHup,
-		})
+		if _, ok := r.Prs[r.id]; ok {
+			r.Step(pb.Message{MsgType: pb.MessageType_MsgHup})
+		}
 	}
 }
 
@@ -354,22 +337,29 @@ func (r *Raft) tick() {
 	// Your Code Here (2A).
 	switch r.State {
 	case StateLeader:
+		r.Prs[r.id].recentAlive = true
+		r.heartbeatElapsed++
+		r.electionElapsed++
+		if r.electionElapsed >= r.electionTimeout {
+			r.electionElapsed = 0
+			if err := r.Step(pb.Message{MsgType: pb.MessageType_MsgCheckQuorum}); err != nil {
+				log.Info("tick checkQuorum return err")
+			}
+		}
 		if r.leadTransferee != None {
 			// r.leadTransferee
 			r.leadTransfereeElapsed++
-			if r.leadTransfereeElapsed >= r.electionTimeout*2 {
+			if r.leadTransfereeElapsed >= r.electionTimeout {
 				r.leadTransfereeElapsed = 0
 				r.leadTransferee = None
 			}
 		}
-		// r.tickLeaderAlive()
-		r.heartbeatElapsed++
+		if r.State != StateLeader {
+			return
+		}
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
 			r.heartbeatElapsed = 0
-			// check quorum debug
-			r.Step(pb.Message{
-				MsgType: pb.MessageType_MsgBeat,
-			})
+			r.Step(pb.Message{MsgType: pb.MessageType_MsgBeat})
 		}
 	default:
 		r.tickForElection()
@@ -433,11 +423,6 @@ func (r *Raft) becomeCandidate() {
 func (r *Raft) becomeLeader() {
 	// Your Code Here (2A).
 	// NOTE: Leader should propose a noop entry on its term
-	// debug Leader->leader no operation?
-	// if r.State == StateLeader {
-	// 	log.Info("[WARN] becomeLeader node already been leader")
-	// 	panic("becomeLeader node already been leader")
-	// }
 
 	r.State = StateLeader
 	r.Lead = r.id
@@ -445,9 +430,6 @@ func (r *Raft) becomeLeader() {
 	r.heartbeatElapsed = 0
 	r.leadTransferee = None
 	r.leadTransfereeElapsed = 0
-	// r.leaderAliveElapased = 0
-	// r.haveSendedSnapShot = make(map[uint64]int)
-	// r.Communicate = make(map[uint64]int)
 	r.electionRandomTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 
 	//---------------
@@ -455,20 +437,16 @@ func (r *Raft) becomeLeader() {
 	for i := range r.Prs {
 		if uint64(i) == r.id {
 			// debuginfo :+2 noopEntry
-			r.Prs[i] = &Progress{Match: lastIndex + 1, Next: lastIndex + 2}
+			r.Prs[i] = &Progress{Match: lastIndex + 1, Next: lastIndex + 2, recentAlive: true}
 		} else {
 			// note
-			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1}
+			r.Prs[i] = &Progress{Match: 0, Next: lastIndex + 1, recentAlive: true}
 		}
 	}
 	//---append noop entry to Leader's RaftLog
 	noopEntry := &pb.Entry{EntryType: pb.EntryType_EntryNormal, Data: nil}
 	r.AppendEntries([]*pb.Entry{noopEntry}...)
 	r.BcastAppend()
-	// log.Infof("[DEBUG] in BecomeLeader lastIndex:%v", lastIndex)
-	// for _, v := range r.RaftLog.entries {
-	// 	log.Infof("	[DEBUG] Leader Entries:%v", v)
-	// }
 }
 
 func (r *Raft) handleRequestVote(m pb.Message) {
@@ -705,11 +683,13 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 		r.becomeFollower(m.Term, m.From)
 		// log.Infof("[ERROR] HeartBeatResp from higher term's follower(%v).", m.From)
 	} else {
+		r.Prs[m.From].recentAlive = true
 		r.sendAppend(m.From)
 	}
 }
 
 func (r *Raft) handleAppendResponse(m pb.Message) {
+	r.Prs[m.From].recentAlive = true
 	if m.Reject {
 		// Case1: if follower lack some logs
 		nextIndex := m.Index
@@ -776,8 +756,24 @@ func (r *Raft) handleTransferLeader(m pb.Message) {
 	}
 }
 
+func (r *Raft) handleCheckQuorum() {
+	countAlive := 0
+	for i := range r.Prs {
+		if r.Prs[i].recentAlive == true {
+			countAlive++
+			r.Prs[i].recentAlive = false
+		}
+	}
+	r.Prs[r.id].recentAlive = true
+	if countAlive <= len(r.Prs)/2 {
+		r.becomeFollower(r.Term, None)
+	}
+}
+
 func (r *Raft) StepLeader(m pb.Message) error {
 	switch m.MsgType {
+	case pb.MessageType_MsgCheckQuorum:
+		r.handleCheckQuorum()
 	case pb.MessageType_MsgBeat:
 		r.BcastHeartBeat(m)
 	case pb.MessageType_MsgAppend:
@@ -801,7 +797,6 @@ func (r *Raft) StepLeader(m pb.Message) error {
 		r.BcastAppend()
 		return err
 	case pb.MessageType_MsgHup:
-		// log.Info("[ERROR] Leader receive local MsgHup")
 	case pb.MessageType_MsgRequestVote:
 		r.handleRequestVote(m)
 	case pb.MessageType_MsgTransferLeader:
@@ -820,18 +815,18 @@ func (r *Raft) StepLeader(m pb.Message) error {
 
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A)
-	if r.id != None && r.Prs[r.id] == nil && len(r.Prs) != 0 {
-		return nil
-	}
-	// log.Infof("[DEBUG] INTO Step1 Phase. message: %v", m)
 	switch {
 	case m.Term == 0:
 		// local message
 		// note: include MsgTransferLeader
 	case m.Term > r.Term:
-		r.becomeFollower(m.Term, None)
+		if m.MsgType == pb.MessageType_MsgAppend || m.MsgType == pb.MessageType_MsgHeartbeat || m.MsgType == pb.MessageType_MsgSnapshot {
+			r.becomeFollower(m.Term, m.From)
+		} else {
+			r.becomeFollower(m.Term, None)
+		}
 	case m.Term < r.Term:
-		// NOTE: every type of scaled Msg could be received. they should not be dealt with.
+		// NOTE: every type of scaled Msg could be received. most of them should not be handled.
 		switch m.MsgType {
 		case pb.MessageType_MsgRequestVote:
 		case pb.MessageType_MsgHeartbeat:
@@ -907,10 +902,12 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	if localPrevLogTerm != m.LogTerm {
 		msg.Reject = true
 		retLogIndex, retLogTerm := m.Index+1, localPrevLogTerm
-		for i := 0; i <= int(m.Index-r.RaftLog.FirstIndex()); i++ {
-			if r.RaftLog.entries[i].Term == localPrevLogTerm {
-				retLogIndex = r.RaftLog.entries[i].Index
-				break
+		if len(r.RaftLog.entries) != 0 {
+			for i := 0; i <= int(m.Index-r.RaftLog.FirstIndex()); i++ {
+				if r.RaftLog.entries[i].Term == localPrevLogTerm {
+					retLogIndex = r.RaftLog.entries[i].Index
+					break
+				}
 			}
 		}
 		msg.LogTerm, msg.Index = retLogTerm, retLogIndex
@@ -1052,8 +1049,9 @@ func (r *Raft) addNode(id uint64) {
 		return
 	}
 	r.Prs[id] = &Progress{
-		Match: 0,
-		Next:  1,
+		Match:       0,
+		Next:        1,
+		recentAlive: true,
 	}
 	r.PendingConfIndex = None
 }

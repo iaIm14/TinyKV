@@ -77,6 +77,9 @@ const (
 	// 'MessageType_MsgTimeoutNow' send from the leader to the leadership transfer target, to let
 	// the transfer target timeout immediately and start a new election.
 	MessageType_MsgTimeoutNow MessageType = 12
+		// MsgCheckQuorum is a local Message to raise Leader's CheckQurum procedure, which will prevent 
+	// Brain Split & its following stale read problem when readIndex
+	MessageType_MsgCheckQuorum    MessageType = 13
 )
 
 var MessageType_name = map[int32]string{
