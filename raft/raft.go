@@ -301,10 +301,6 @@ func (r *Raft) sendHeartbeat(to uint64) {
 
 // tickForElection Follower and Candidate tick handler
 func (r *Raft) tickForElection() {
-	// log.Info("tickForElection(). tick info: r.electionElapsed: %v ; r.electionRandomTimeout %v;r.electionTimeout %v;", r.electionElapsed, r.electionRandomTimeout, r.electionTimeout)
-	// if r.Term == 0 && len(r.Prs) == 0 {
-	// 	return
-	// }
 	r.electionElapsed++
 	if r.electionRandomTimeout <= r.electionElapsed {
 		r.electionElapsed = 0
@@ -313,23 +309,6 @@ func (r *Raft) tickForElection() {
 		}
 	}
 }
-
-// func (r *Raft) tickLeaderAlive() {
-// 	r.leaderAliveElapased++
-// 	for i := range r.Communicate {
-// 		r.Communicate[i]++
-// 		if r.Communicate[i]*9 >= r.electionTimeout*10 {
-// 			delete(r.Communicate, i)
-// 		}
-// 	}
-// 	if r.leaderAliveElapased >= r.electionTimeout*2 {
-// 		r.leaderAliveElapased = 0
-// 		if len(r.Communicate)*2 < len(r.Prs) {
-// 			// AliveCheck NotPass
-// 			r.becomeFollower(r.Term, None)
-// 		}
-// 	}
-// }
 
 // tick advances the internal logical clock by a single tick.
 func (r *Raft) tick() {
@@ -759,7 +738,7 @@ func (r *Raft) handleTransferLeader(m pb.Message) {
 func (r *Raft) handleCheckQuorum() {
 	countAlive := 0
 	for i := range r.Prs {
-		if r.Prs[i].recentAlive == true {
+		if r.Prs[i].recentAlive {
 			countAlive++
 			r.Prs[i].recentAlive = false
 		}
