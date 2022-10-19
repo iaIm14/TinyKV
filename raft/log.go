@@ -117,7 +117,7 @@ func (l *RaftLog) maybeCompact() {
 				l.entries = []pb.Entry{}
 				return
 			} else {
-				l.entries = l.entries[firstIndex-l.FirstIndex():]
+				l.entries = l.entries[l.entIdx2slcIdx(firstIndex):]
 				return
 			}
 		}
@@ -144,7 +144,8 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 		panic(errors.New("unstableEntries l.stabled >=l.lastIndex"))
 		// return []pb.Entry{}
 	}
-	return l.entries[l.stabled+1-l.FirstIndex():]
+	// unstable+1 < raftlog.entries[0].idx
+	return l.entries[int(l.stabled)+1-int(l.FirstIndex()):]
 }
 
 // nextEnts returns all the committed but not applied entries
@@ -158,7 +159,7 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		return nil
 		// debug info : return []pb.Entry{}
 	}
-	return l.entries[l.applied+1-l.FirstIndex() : l.committed+1-l.FirstIndex()]
+	return l.entries[l.entIdx2slcIdx(l.applied)+1 : l.entIdx2slcIdx(l.committed)+1]
 }
 
 // getEntries return all Entry Index between [lo,ro)
@@ -209,21 +210,19 @@ func (l *RaftLog) LastIndex() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-	if len(l.entries) > 0 && i >= l.FirstIndex() {
-		if i > l.entries[len(l.entries)-1].Index {
-			log.Info("[ERROR] Term() i>=raftlog.entries[last].index")
-		} else {
-			return l.entries[i-l.FirstIndex()].Term, nil
-		}
+	if len(l.entries) > 0 && i >= l.FirstIndex() && i <= l.entries[len(l.entries)-1].Index {
+		return l.entries[l.entIdx2slcIdx(i)].Term, nil
 	}
 	// i not in Raftlog.entries, should search in storage
-	// if >lastIndex or <FirstIndex() will return 0,ErrUnavailable(MemoryStorage)
+	// if >lastIndex or <FirstIndex() will return 0,ErrCompacted or ErrUnavailable (MemoryStorage)
 	// to pass test, should let it return
 	term, err := l.storage.Term(i)
 
 	if err != nil && !IsEmptySnap(l.PendingSnapshot) {
-		if err != ErrUnavailable {
-			log.Info("[WARN] storage.Term return err but not ErrUnavailable")
+		if err == ErrUnavailable {
+			log.Info("[WARN] storage.Term return ErrUnavailable")
+		} else if err == ErrCompacted {
+			log.Info("[WARN] storage.Term return ErrCompacted")
 		}
 		if i == l.PendingSnapshot.Metadata.Index {
 			term = l.PendingSnapshot.Metadata.Term
@@ -231,8 +230,7 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 		} else if i < l.PendingSnapshot.Metadata.Index {
 			err = ErrCompacted
 		} else {
-			log.Error("storage.Term return ErrUnavailable but i.index > snapshot's Index")
-			panic(errors.New("storage.Term return ErrUnavailable but i.index > snapshot's Index"))
+			log.Error("[ERROR] Term() i==index > snapshot's Index while storage.Term() can't find and return err")
 		}
 	}
 	return term, err
@@ -242,4 +240,8 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 func (l *RaftLog) LastTerm() (uint64, error) {
 	lastIndex := l.LastIndex()
 	return l.Term(lastIndex)
+}
+
+func (l *RaftLog) entIdx2slcIdx(i uint64) int {
+	return int(i - l.FirstIndex())
 }

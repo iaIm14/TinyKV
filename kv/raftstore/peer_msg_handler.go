@@ -476,9 +476,9 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if !d.RaftGroup.HasReady() {
 		return
 	}
-	// if d.RaftGroup.Raft.RaftLog.PendingSnapshot != nil {
-	// 	return
-	// }
+	if d.RaftGroup.Raft.RaftLog.PendingSnapshot != nil && d.LastApplyingIndex != d.peerStorage.applyState.AppliedIndex {
+		return
+	}
 	ready := d.RaftGroup.Ready()
 	regionChange, err := d.peerStorage.SaveReadyState(&ready, d)
 	if err != nil {
@@ -486,14 +486,18 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	}
 	// regionChange Has been apply SaveReadyState()(PeerStorage update)
 	// Snapshot ConfChange change region
-	if !raft.IsEmptySnap(&ready.Snapshot) && regionChange != nil {
+	if regionChange != nil {
 		storeMeta := d.ctx.storeMeta
 		storeMeta.Lock()
 		// storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
-		storeMeta.regions[regionChange.Region.Id] = regionChange.Region
+		storeMeta.setRegion(regionChange.Region, d.peer)
+		if len(regionChange.PrevRegion.Peers) > 0 {
+			storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
+		}
 		storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
 		storeMeta.Unlock()
-		// d.lastAppinyIdx = d.peerStorage.AppliedIndex()
+		d.LastApplyingIndex = d.peerStorage.AppliedIndex()
+
 		d.Send(d.ctx.trans, ready.Messages)
 		d.handleSnapshotReady(&ready, regionChange)
 		d.RaftGroup.Advance(ready)
@@ -504,6 +508,9 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	// }
 	d.Send(d.ctx.trans, ready.Messages)
 	if len(ready.CommittedEntries) != 0 {
+		if len(ready.CommittedEntries) != 0 && regionChange == nil {
+			d.LastApplyingIndex = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
+		}
 		wb := &engine_util.WriteBatch{}
 		readEntries := []*eraftpb.Entry{}
 		for i := range ready.CommittedEntries {

@@ -314,32 +314,22 @@ func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.Write
 	if len(entries) == 0 {
 		return nil
 	}
-	lastIndex, err := ps.LastIndex()
-	if err != nil {
-		panic(err)
-	}
-	firstIndex, err := ps.FirstIndex()
-	if err != nil {
-		panic(err)
-	}
-	newLastIndex := entries[len(entries)-1].Index
-	newLastTerm := entries[len(entries)-1].Term
-	if firstIndex > newLastIndex {
-		return nil
-	}
-	if firstIndex > entries[0].Index {
-		entries = entries[firstIndex-entries[0].Index:]
-	}
-	for i := range entries {
-		err := raftWB.SetMeta(meta.RaftLogKey(ps.region.Id, entries[i].Index), &entries[i])
+	var err error
+	regionId := ps.region.GetId()
+	for _, entry := range entries {
+		err = raftWB.SetMeta(meta.RaftLogKey(regionId, entry.Index), &entry)
 		if err != nil {
 			return err
 		}
 	}
-	for i := newLastIndex + 1; i <= lastIndex; i++ {
-		raftWB.DeleteMeta(meta.RaftLogKey(ps.region.Id, i))
+	prevLast, _ := ps.LastIndex()
+	lastIndex := entries[len(entries)-1].Index
+	lastTerm := entries[len(entries)-1].Term
+	for i := lastIndex + 1; i <= prevLast; i++ {
+		raftWB.DeleteMeta(meta.RaftLogKey(regionId, i))
 	}
-	ps.raftState.LastIndex, ps.raftState.LastTerm = newLastIndex, newLastTerm
+	ps.raftState.LastIndex = lastIndex
+	ps.raftState.LastTerm = lastTerm
 	return nil
 }
 
@@ -370,10 +360,6 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 	ps.applyState.AppliedIndex = snapshot.Metadata.Index
 	ps.raftState.LastIndex = snapshot.Metadata.Index
 	ps.raftState.LastTerm = snapshot.Metadata.Term
-	err := kvWB.SetMeta(meta.ApplyStateKey(snapData.Region.GetId()), ps.applyState)
-	if err != nil {
-		return nil, err
-	}
 
 	status := make(chan bool)
 	ps.regionSched <- &runner.RegionTaskApply{
@@ -386,8 +372,11 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 	if ret := <-status; ret {
 		ps.snapState.StateType = snap.SnapState_Relax
 	} else {
-		// panic
 		return nil, errors.New("TaskApply Fail")
+	}
+	err := kvWB.SetMeta(meta.ApplyStateKey(snapData.Region.GetId()), ps.applyState)
+	if err != nil {
+		return nil, err
 	}
 	result := &ApplySnapResult{PrevRegion: prevRegion, Region: ps.region}
 	meta.WriteRegionState(kvWB, ps.region, rspb.PeerState_Normal)

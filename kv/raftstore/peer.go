@@ -33,7 +33,8 @@ func NotifyReqRegionRemoved(regionId uint64, cb *message.Callback) {
 // use this function to create the peer. The region must contain the peer info
 // for this store.
 func createPeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
-	engines *engine_util.Engines, region *metapb.Region) (*peer, error) {
+	engines *engine_util.Engines, region *metapb.Region,
+) (*peer, error) {
 	metaPeer := util.FindPeer(region, storeID)
 	if metaPeer == nil {
 		return nil, errors.Errorf("find no peer for store %d in region %v", storeID, region)
@@ -46,7 +47,8 @@ func createPeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
 // know the region_id and peer_id when creating this replicated peer, the region info
 // will be retrieved later after applying snapshot.
 func replicatePeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
-	engines *engine_util.Engines, regionID uint64, metaPeer *metapb.Peer) (*peer, error) {
+	engines *engine_util.Engines, regionID uint64, metaPeer *metapb.Peer,
+) (*peer, error) {
 	// We will remove tombstone key when apply snapshot
 	log.Infof("[region %v] replicates peer with ID %d", regionID, metaPeer.GetId())
 	raftstate, err := meta.GetRaftLocalState(engines.Raft, regionID)
@@ -99,8 +101,9 @@ type peer struct {
 	// Cache the peers information from other stores
 	// when sending raft messages to other peers, it's used to get the store id of target peer
 	// (Used in 3B conf change)
-	peerCache   map[uint64]*metapb.Peer
-	coPeerCache []struct {
+	peerCache         map[uint64]*metapb.Peer
+	LastApplyingIndex uint64
+	coPeerCache       []struct {
 		uint64
 		*metapb.Peer
 		bool
@@ -125,7 +128,8 @@ type peer struct {
 }
 
 func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, region *metapb.Region, regionSched chan<- worker.Task,
-	meta *metapb.Peer) (*peer, error) {
+	meta *metapb.Peer,
+) (*peer, error) {
 	if meta.GetId() == util.InvalidID {
 		return nil, fmt.Errorf("invalid peer id")
 	}
@@ -160,6 +164,7 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 		Tag:                   tag,
 		ticker:                newTicker(region.GetId(), cfg),
 		shouldDestroy:         false,
+		LastApplyingIndex:     appliedIndex,
 	}
 
 	// If this region has only one peer and I am the one, campaign directly.
@@ -185,6 +190,7 @@ func (p *peer) insertCoPeerCache(peer *metapb.Peer) {
 		true,
 	})
 }
+
 func (p *peer) removeCoPeerCache(peerID uint64) {
 	p.coPeerCache = append(p.coPeerCache, struct {
 		uint64
@@ -196,6 +202,7 @@ func (p *peer) removeCoPeerCache(peerID uint64) {
 		false,
 	})
 }
+
 func (p *peer) insertPeerCache(peer *metapb.Peer) {
 	p.peerCache[peer.GetId()] = peer
 }

@@ -93,7 +93,6 @@ func (rn *RawNode) Tick() {
 
 // Campaign causes this RawNode to transition to candidate state.
 func (rn *RawNode) Campaign() error {
-	log.Infof("[DEBUG]Campaign call step ,RawNode.RaftID:%v", rn.Raft.id)
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgHup,
 	})
@@ -105,7 +104,8 @@ func (rn *RawNode) Propose(data []byte) error {
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgPropose,
 		From:    rn.Raft.id,
-		Entries: []*pb.Entry{&ent}})
+		Entries: []*pb.Entry{&ent},
+	})
 }
 
 // ProposeConfChange proposes a config change.
