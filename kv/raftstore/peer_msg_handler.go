@@ -130,7 +130,7 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmd
 	case raft_cmdpb.AdminCmdType_CompactLog:
 		compactLog := req.GetCompactLog()
 		applySt := d.peerStorage.applyState
-		if compactLog.CompactIndex >= d.LastCompactedIdx {
+		if compactLog.CompactIndex > d.peerStorage.truncatedIndex()+1 {
 			applySt.TruncatedState.Index = compactLog.CompactIndex
 			applySt.TruncatedState.Term = compactLog.CompactTerm
 			wb.SetMeta(meta.ApplyStateKey(d.regionId), applySt)
@@ -310,9 +310,6 @@ func (d *peerMsgHandler) processConfChange(entry *eraftpb.Entry, confChange *era
 
 func (d *peerMsgHandler) marshalEntry(entry *eraftpb.Entry) *raft_cmdpb.RaftCmdRequest {
 	msg := new(raft_cmdpb.RaftCmdRequest)
-	if entry.Data == nil {
-		return nil
-	}
 	if entry.EntryType == eraftpb.EntryType_EntryConfChange {
 		cc := &eraftpb.ConfChange{}
 		err := cc.Unmarshal(entry.Data)
@@ -498,9 +495,9 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		storeMeta.Unlock()
 		d.LastApplyingIndex = d.peerStorage.AppliedIndex()
 
-		d.Send(d.ctx.trans, ready.Messages)
-		d.handleSnapshotReady(&ready, regionChange)
-		d.RaftGroup.Advance(ready)
+		// d.Send(d.ctx.trans, ready.Messages)
+		// d.handleSnapshotReady(&ready, regionChange)
+		// d.RaftGroup.Advance(ready)
 		return
 	}
 	// if len(ready.CommittedEntries) != 0 {
@@ -511,13 +508,15 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		if len(ready.CommittedEntries) != 0 && regionChange == nil {
 			d.LastApplyingIndex = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
 		}
+		if regionChange != nil {
+			ready.CommittedEntries = nil
+		}
 		wb := &engine_util.WriteBatch{}
 		readEntries := []*eraftpb.Entry{}
 		for i := range ready.CommittedEntries {
 			entry := &ready.CommittedEntries[i]
 			// log.Infof("{DEBUG entry: %v string:%v %v}", entry.Data, entry.EntryType.String(), entry.Index)
 			if entry.Index != d.peerStorage.applyState.AppliedIndex+1 {
-				// TODO: maybe need panic ,not ErrStaleCommand callback
 				panic(fmt.Sprintf("stale! entry.index:%v; appliedIndex:%v", entry.Index, d.peerStorage.applyState.AppliedIndex))
 			}
 			msg := d.marshalEntry(entry)
@@ -536,19 +535,16 @@ func (d *peerMsgHandler) HandleRaftReady() {
 				wb = d.process(&ready.CommittedEntries[i], wb)
 			}
 			if d.shouldDestroy || d.stopped {
-				// TODO: need change to break
 				break
 			}
 		}
-		if !d.stopped {
-			err := wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
-			if err != nil {
-				panic(err)
-			}
-			err = wb.WriteToDB(d.peerStorage.Engines.Kv)
-			if err != nil {
-				panic(err)
-			}
+		err := wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
+		if err != nil {
+			panic(err)
+		}
+		err = wb.WriteToDB(d.peerStorage.Engines.Kv)
+		if err != nil {
+			panic(err)
 		}
 		if !d.stopped && !d.shouldDestroy {
 			d.HandleReadEntries(readEntries, d.handleReadCmd)
