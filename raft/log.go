@@ -193,13 +193,13 @@ func (l *RaftLog) LastIndex() uint64 {
 		storageIndex = 0
 	}
 	if raftlogIndex != 0 {
-		log.Info("lastindex return raftlogIndex")
+		// log.Info("lastindex return raftlogIndex")
 		return raftlogIndex
 	} else if pendingSnapshotIndex != 0 {
-		log.Info("lastindex return pendingSnapshotIndex")
+		// log.Info("lastindex return pendingSnapshotIndex")
 		return pendingSnapshotIndex
 	} else if storageIndex != 0 {
-		log.Info("lastindex return storageIndex")
+		// log.Info("lastindex return storageIndex")
 		return storageIndex
 	} else {
 		log.Info("WARN: lastindex return 0")

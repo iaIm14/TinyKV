@@ -622,7 +622,9 @@ func (r *Raft) StepFollower(m pb.Message) error {
 	case pb.MessageType_MsgTimeoutNow:
 		// log.Info("[DEBUG] MessageType_MsgTimeoutNow occur.")
 		// log.Infof("%v receive MessageType_MsgTimeoutNow from %v", r.id, m.From)
-		r.raiseElection()
+		if _, ok := r.Prs[r.id]; ok {
+			r.raiseElection()
+		}
 	case pb.MessageType_MsgTransferLeader:
 		// log.Info("[DEBUG] MessageType_MsgTransferLeader occur.")
 		if r.Lead == None {
@@ -730,14 +732,8 @@ func (r *Raft) handleTransferLeader(m pb.Message) {
 	if m.From == r.id || r.Prs[m.From] == nil {
 		return
 	}
-	if r.leadTransferee != None {
-		if r.leadTransferee == m.From {
-			return
-		} else {
-			// Node before can't be leader(no resp)
-			// debuginfo
-			// return
-		}
+	if r.leadTransferee != None && r.leadTransferee == m.From {
+		return
 	}
 	log.Infof("%v start transferring to %v", r.id, m.From)
 	r.leadTransferee = m.From

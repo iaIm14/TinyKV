@@ -474,15 +474,6 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	// wait.Done()
 	// }()
 	// wait.Wait()
-	if len(d.coPeerCache) != 0 {
-		for i := range d.coPeerCache {
-			if d.coPeerCache[i].bool {
-				d.insertPeerCache(d.coPeerCache[i].Peer)
-			} else {
-				d.removePeerCache(d.coPeerCache[i].uint64)
-			}
-		}
-	}
 	d.RaftGroup.Advance(ready)
 }
 
