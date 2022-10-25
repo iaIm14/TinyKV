@@ -39,12 +39,6 @@ func max(a, b uint64) uint64 {
 	}
 	return b
 }
-func mx(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // IsEmptyHardState returns true if the given HardState is empty.
 func IsEmptyHardState(st pb.HardState) bool {
@@ -134,6 +128,17 @@ func isHardStateEqual(a, b pb.HardState) bool {
 	return a.Term == b.Term && a.Vote == b.Vote && a.Commit == b.Commit
 }
 
-func isSoftStateEqual(a, b SoftState) bool {
-	return a.Lead == b.Lead && a.RaftState == b.RaftState
+func TransFromPointer(entries []*pb.Entry) []pb.Entry {
+	res := make([]pb.Entry, len(entries))
+	for i := range entries {
+		res[i] = *entries[i]
+	}
+	return res
+}
+func TransToPointer(entries []pb.Entry) []*pb.Entry {
+	res := make([]*pb.Entry, len(entries))
+	for i := range entries {
+		res[i] = &entries[i]
+	}
+	return res
 }

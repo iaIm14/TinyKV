@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -265,7 +264,7 @@ func TestLogReplication2AB(t *testing.T) {
 			newNetwork(nil, nil, nil),
 			[]pb.Message{
 				{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("somedata")}}},
-				{From: 2, To: 2, MsgType: pb.MessageType_MsgHup},
+				{From: 1, To: 2, MsgType: pb.MessageType_MsgHup},
 				{From: 1, To: 2, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("somedata")}}},
 			},
 			4,
@@ -372,7 +371,7 @@ func TestCommitWithHeartbeat2AB(t *testing.T) {
 	tt.recover()
 
 	// leader broadcast heartbeat
-	tt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
+	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
 
 	if sm.RaftLog.committed != 3 {
 		t.Errorf("committed = %d, want %d", sm.RaftLog.committed, 3)
@@ -504,8 +503,10 @@ func TestOldMessages2AB(t *testing.T) {
 
 	ilog := newLog(
 		newMemoryStorageWithEnts([]pb.Entry{
-			{}, {Data: nil, Term: 1, Index: 1},
-			{Data: nil, Term: 2, Index: 2}, {Data: nil, Term: 3, Index: 3},
+			{},
+			{Data: nil, Term: 1, Index: 1},
+			{Data: nil, Term: 2, Index: 2},
+			{Data: nil, Term: 3, Index: 3},
 			{Data: []byte("somedata"), Term: 3, Index: 4},
 		}))
 	ilog.committed = 4
@@ -1109,19 +1110,18 @@ func TestSlowNodeRestore2C(t *testing.T) {
 	nt.storage[1].Compact(lead.RaftLog.applied)
 
 	nt.recover()
-	log.Info("recover finished")
+
 	// send heartbeats so that the leader can learn everyone is active.
 	// node 3 will only be considered as active when node 1 receives a reply from it.
-	nt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
-	log.Info("MsgBeat finished")
+	nt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgBeat})
+
 	// trigger a snapshot
-	nt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
-	log.Info("Propose finished")
+	nt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
+
 	follower := nt.peers[3].(*Raft)
 
 	// trigger a commit
-	nt.send_debug(t, pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
-	log.Info("Propose trigger commit finished")
+	nt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{}}})
 	if follower.RaftLog.committed != lead.RaftLog.committed {
 		t.Errorf("follower.committed = %d, want %d", follower.RaftLog.committed, lead.RaftLog.committed)
 	}
@@ -1186,6 +1186,7 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, s)
 	r.becomeCandidate()
 	r.becomeLeader()
+
 	// Begin to remove the second node.
 	cc := pb.ConfChange{
 		ChangeType: pb.ConfChangeType_RemoveNode,
@@ -1206,7 +1207,7 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 		t.Fatalf("unexpected committed entries: %v", ents)
 	}
 	ccIndex := r.RaftLog.LastIndex()
-	log.Info("propose ConfChange finished")
+
 	// While the config change is pending, make another proposal.
 	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgPropose,
@@ -1214,7 +1215,7 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 			{EntryType: pb.EntryType_EntryNormal, Data: []byte("hello")},
 		},
 	})
-	log.Info("propose hello finished")
+
 	// Node 2 acknowledges the config change, committing it.
 	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgAppendResponse,
@@ -1223,8 +1224,6 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 		Term:    r.Term,
 	})
 	ents := nextEnts(r, s)
-	log.Info("step(MsgApp) finished")
-
 	if len(ents) != 2 {
 		t.Fatalf("expected two committed entries, got %v", ents)
 	}
@@ -1416,12 +1415,10 @@ func TestLeaderTransferSecondTransferToAnotherNode3A(t *testing.T) {
 	nt.isolate(3)
 
 	lead := nt.peers[1].(*Raft)
-	log.Infof("MsgHup finished")
-	nt.send_debug(t, pb.Message{From: 3, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
-	log.Infof("3 to 1 transfer finished")
+
+	nt.send(pb.Message{From: 3, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
 	// Transfer leadership to another node.
-	nt.send_debug(t, pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
-	log.Infof("2 to 1 transfer finished")
+	nt.send(pb.Message{From: 2, To: 1, MsgType: pb.MessageType_MsgTransferLeader})
 
 	checkLeaderTransferState(t, lead, StateFollower, 2)
 }
@@ -1613,15 +1610,7 @@ func (nw *network) send(msgs ...pb.Message) {
 		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
 	}
 }
-func (nw *network) send_debug(t *testing.T, msgs ...pb.Message) {
-	for len(msgs) > 0 {
-		m := msgs[0]
-		p := nw.peers[m.To]
-		log.Infof("[DEBUG] network msg:%v ,Node:%v", m, p)
-		p.Step(m)
-		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
-	}
-}
+
 func (nw *network) drop(from, to uint64, perc float64) {
 	nw.dropm[connem{from, to}] = perc
 }

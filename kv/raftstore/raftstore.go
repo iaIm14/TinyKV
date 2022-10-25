@@ -268,6 +268,7 @@ func (bs *Raftstore) startWorkers(peers []*peer) {
 	bs.wg.Add(2) // raftWorker, storeWorker
 	rw := newRaftWorker(ctx, router)
 	go rw.run(bs.closeCh, bs.wg)
+
 	sw := newStoreWorker(ctx, bs.storeState)
 	go sw.run(bs.closeCh, bs.wg)
 	router.sendStore(message.Msg{Type: message.MsgTypeStoreStart, Data: ctx.store})

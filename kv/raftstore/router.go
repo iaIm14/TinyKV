@@ -58,7 +58,6 @@ func (pr *router) close(regionID uint64) {
 }
 
 func (pr *router) send(regionID uint64, msg message.Msg) error {
-	// log.Infof("[DEBUG]+++ router send data %v; regionId %v; Type %v", msg.Data, msg.RegionID, msg.Type)
 	msg.RegionID = regionID
 	p := pr.get(regionID)
 	if p == nil || atomic.LoadUint32(&p.closed) == 1 {
@@ -101,6 +100,5 @@ func (r *RaftstoreRouter) SendRaftCommand(req *raft_cmdpb.RaftCmdRequest, cb *me
 		Callback: cb,
 	}
 	regionID := req.Header.RegionId
-	err := r.router.send(regionID, message.NewPeerMsg(message.MsgTypeRaftCmd, regionID, cmd))
-	return err
+	return r.router.send(regionID, message.NewPeerMsg(message.MsgTypeRaftCmd, regionID, cmd))
 }

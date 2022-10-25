@@ -39,7 +39,7 @@ func createPeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
 	if metaPeer == nil {
 		return nil, errors.Errorf("find no peer for store %d in region %v", storeID, region)
 	}
-	log.Infof("region %v create peer with ID %d,StartKey:%v,EndKey:%v", region, metaPeer.Id, region.StartKey, region.EndKey)
+	log.Infof("region %v create peer with ID %d", region, metaPeer.Id)
 	return NewPeer(storeID, cfg, engines, region, sched, metaPeer)
 }
 
@@ -51,13 +51,6 @@ func replicatePeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
 ) (*peer, error) {
 	// We will remove tombstone key when apply snapshot
 	log.Infof("[region %v] replicates peer with ID %d", regionID, metaPeer.GetId())
-	raftstate, err := meta.GetRaftLocalState(engines.Raft, regionID)
-	if err != nil {
-		log.Info(err)
-		log.Info("RaftPoint:!!!", engines.Raft)
-	} else {
-		log.Infof("RaftLocalState:lastindex=%v,committed=%v,term=%v,LastTerm=%v", raftstate.LastIndex, raftstate.HardState.Commit, raftstate.HardState.Term, raftstate.LastTerm)
-	}
 	region := &metapb.Region{
 		Id:          regionID,
 		RegionEpoch: &metapb.RegionEpoch{},
@@ -92,8 +85,8 @@ type peer struct {
 
 	// Record the callback of the proposals
 	// (Used in 2B)
-	proposals     []*proposal
-	readProposals []*proposal
+	proposals []*proposal
+
 	// Index of last scheduled compacted raft log.
 	// (Used in 2C)
 	LastCompactedIdx uint64
@@ -101,21 +94,14 @@ type peer struct {
 	// Cache the peers information from other stores
 	// when sending raft messages to other peers, it's used to get the store id of target peer
 	// (Used in 3B conf change)
-	peerCache         map[uint64]*metapb.Peer
-	LastApplyingIndex uint64
-	coPeerCache       []struct {
-		uint64
-		*metapb.Peer
-		bool
-	}
+	peerCache map[uint64]*metapb.Peer
 	// Record the instants of peers being added into the configuration.
 	// Remove them after they are not pending any more.
 	// (Used in 3B conf change)
 	PeersStartPendingTime map[uint64]time.Time
 	// Mark the peer as stopped, set when peer is destroyed
 	// (Used in 3B conf change)
-	stopped       bool
-	shouldDestroy bool
+	stopped bool
 
 	// An inaccurate difference in region size since last reset.
 	// split checker is triggered when it exceeds the threshold, it makes split checker not scan the data very often
@@ -163,13 +149,10 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 		PeersStartPendingTime: make(map[uint64]time.Time),
 		Tag:                   tag,
 		ticker:                newTicker(region.GetId(), cfg),
-		shouldDestroy:         false,
-		LastApplyingIndex:     appliedIndex,
 	}
 
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(region.GetPeers()) == 1 && region.GetPeers()[0].GetStoreId() == storeId {
-		// log.Infof("[DEBUG] call rawnode.campaign ")
 		err = p.RaftGroup.Campaign()
 		if err != nil {
 			return nil, err
@@ -177,30 +160,6 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 	}
 
 	return p, nil
-}
-
-func (p *peer) insertCoPeerCache(peer *metapb.Peer) {
-	p.coPeerCache = append(p.coPeerCache, struct {
-		uint64
-		*metapb.Peer
-		bool
-	}{
-		peer.GetId(),
-		peer,
-		true,
-	})
-}
-
-func (p *peer) removeCoPeerCache(peerID uint64) {
-	p.coPeerCache = append(p.coPeerCache, struct {
-		uint64
-		*metapb.Peer
-		bool
-	}{
-		peerID,
-		nil,
-		false,
-	})
 }
 
 func (p *peer) insertPeerCache(peer *metapb.Peer) {
@@ -270,17 +229,12 @@ func (p *peer) Destroy(engine *engine_util.Engines, keepData bool) error {
 	for _, proposal := range p.proposals {
 		NotifyReqRegionRemoved(region.Id, proposal.cb)
 	}
-	for _, proposal := range p.readProposals {
-		NotifyReqRegionRemoved(region.Id, proposal.cb)
-	}
 	p.proposals = nil
-	p.readProposals = nil
 
 	log.Infof("%v destroy itself, takes %v", p.Tag, time.Now().Sub(start))
 	return nil
 }
 
-// isInitialized check peer.PeerStorage.region.peers
 func (p *peer) isInitialized() bool {
 	return p.peerStorage.isInitialized()
 }
