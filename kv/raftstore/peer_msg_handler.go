@@ -16,6 +16,7 @@ import (
 	"github.com/pingcap-incubator/tinykv/proto/pkg/metapb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
+	"github.com/pingcap-incubator/tinykv/raft"
 	"github.com/pingcap-incubator/tinykv/scheduler/pkg/btree"
 	"github.com/pingcap/errors"
 )
@@ -423,6 +424,31 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, wb *engine_util.WriteBatc
 	return wb
 }
 
+type applier struct {
+	shouldRemove bool
+	id           uint64
+	term         uint64
+	region       *metapb.Region
+	proposals    []*proposal
+}
+
+func (d *peerMsgHandler) applyEntries(ready raft.Ready) {
+	if len(ready.CommittedEntries) != 0 {
+		wb := &engine_util.WriteBatch{}
+		for i := range ready.CommittedEntries {
+			wb = d.process(&ready.CommittedEntries[i], wb)
+			if d.stopped {
+				// wait.Done()
+				break
+				// note! return not break!!
+			}
+		}
+		d.peerStorage.applyState.AppliedIndex = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
+		wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
+		wb.MustWriteToDB(d.peerStorage.Engines.Kv)
+	}
+}
+
 func (d *peerMsgHandler) HandleRaftReady() {
 	if d.stopped {
 		return
@@ -440,13 +466,14 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	// Snapshot ConfChange change region
 	if regionChange != nil {
 		if !util.RegionEqual(regionChange.PrevRegion, regionChange.Region) {
-			d.SetRegion(regionChange.Region)
-			storeMeta := d.ctx.storeMeta
-			storeMeta.Lock()
-			storeMeta.regions[regionChange.Region.Id] = regionChange.Region
-			storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
-			storeMeta.regionRanges.ReplaceOrInsert(&regionItem{regionChange.Region})
-			storeMeta.Unlock()
+			d.ctx.storeMeta.Lock()
+			d.ctx.storeMeta.setRegion(regionChange.Region, d.peer)
+			if len(regionChange.PrevRegion.Peers) > 0 {
+				d.ctx.storeMeta.regionRanges.Delete(&regionItem{region: regionChange.PrevRegion})
+			}
+			d.ctx.storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: regionChange.Region})
+			d.ctx.storeMeta.Unlock()
+			d.LastApplyingIndex = d.peerStorage.AppliedIndex()
 		}
 	}
 	// wait := sync.WaitGroup{}
@@ -457,20 +484,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	// wait.Done()
 	// }()
 	// go func() {
-	if len(ready.CommittedEntries) != 0 {
-		wb := &engine_util.WriteBatch{}
-		for i := range ready.CommittedEntries {
-			wb = d.process(&ready.CommittedEntries[i], wb)
-			if d.stopped {
-				// wait.Done()
-				return
-				// note! return not break!!
-			}
-		}
-		d.peerStorage.applyState.AppliedIndex = ready.CommittedEntries[len(ready.CommittedEntries)-1].Index
-		wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
-		wb.MustWriteToDB(d.peerStorage.Engines.Kv)
-	}
+	d.applyEntries(ready)
 	// wait.Done()
 	// }()
 	// wait.Wait()

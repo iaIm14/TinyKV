@@ -196,9 +196,6 @@ func (rn *RawNode) HasReady() bool {
 // last Ready results.
 func (rn *RawNode) Advance(rd Ready) {
 	// Your Code Here (2A).
-	// if !isSoftStateEqual(*rd.SoftState, *rn.preSoftState) {
-	// 	rn.preSoftState = rd.SoftState
-	// }
 	if rd.SoftState != nil {
 		rn.preSoftState = rd.SoftState
 	}
