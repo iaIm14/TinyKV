@@ -118,7 +118,7 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// if the entries is null
 	if len(l.entries) == 0 {
-		return
+		return nil
 	}
 	firstIndex := l.entries[0].Index
 	if int(l.committed-firstIndex+1) < 0 {
