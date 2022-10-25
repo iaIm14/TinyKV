@@ -164,7 +164,12 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		return
 	}
 	firstIndex := l.entries[0].Index
-	if int(l.committed-firstIndex+1) < 0 || l.applied-firstIndex+1 > l.LastIndex() {
+	if l.committed < firstIndex-1 {
+		// panic(errors.New("nextEnts l.committed < firstIndex-1")
+		return
+	}
+	if l.applied < firstIndex-1 {
+		// panic(errors.New("l.applied <firstIndex-1"))
 		return
 	}
 	ents = l.entries[l.applied+1-firstIndex : l.committed+1-firstIndex]
