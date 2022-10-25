@@ -15,8 +15,6 @@
 package raft
 
 import (
-	"fmt"
-
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 	"github.com/pingcap/log"
 )
@@ -101,7 +99,10 @@ func (l *RaftLog) maybeCompact() {
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
-	if l.stabled >= l.LastIndex() || len(l.entries) == 0 {
+	if l.stabled > l.LastIndex() {
+		panic("unstableEntries error!")
+	}
+	if len(l.entries) == 0 || l.stabled == l.LastIndex() {
 		return []pb.Entry{}
 	}
 	firstIndex := l.entries[0].Index
@@ -119,10 +120,10 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	}
 	firstIndex := l.entries[0].Index
 	if int(l.committed-firstIndex+1) < 0 || l.applied-firstIndex+1 > l.LastIndex() {
-		return
+		panic("nextEnts error!")
 	}
 	if l.applied > l.committed {
-		fmt.Println()
+		panic("nextEnts error!")
 	}
 	ents = l.entries[l.applied+1-firstIndex : l.committed+1-firstIndex]
 	return
