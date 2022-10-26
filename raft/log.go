@@ -15,6 +15,8 @@
 package raft
 
 import (
+	"errors"
+
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 	"github.com/pingcap/log"
 )
@@ -120,7 +122,7 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		panic("nextEnts error!")
 	}
 	if l.applied+1 < firstIndex {
-		// panic(errors.New("nextEnts l.applied < firstIndex-1"))
+		panic(errors.New("nextEnts l.applied < firstIndex-1"))
 		return nil
 	}
 	if l.applied > l.committed {
