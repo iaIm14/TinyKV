@@ -15,11 +15,12 @@
 package raft
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sort"
 
+	"github.com/gogo/protobuf/sortkeys"
 	"github.com/pingcap-incubator/tinykv/kv/util"
 	"github.com/pingcap-incubator/tinykv/log"
 
@@ -564,153 +565,208 @@ func (r *Raft) handleHup() {
 	r.bCastVote()
 }
 
-// handleAppendResponse the leader handle the appendResponse
 func (r *Raft) handleAppendResponse(m pb.Message) {
-	// check whether the follower reject the appendMsg
 	if m.Reject {
-		if m.Index < r.RaftLog.FirstIndex()-1 {
-			r.sendSnapshot(m.From)
-			return
-		}
-		m.Index = min(m.Index, r.RaftLog.LastIndex())
-		// reject : there is a conflict between leader and follower
-		// find the newest entry that term <= logTerm
-		hintIndex := min(m.Index, r.RaftLog.LastIndex())
-		hintIndex = r.RaftLog.findConflictByTerm(hintIndex, m.LogTerm)
-		r.Prs[m.From].Next = hintIndex + 1
-		r.sendAppend(m.From)
-
-	} else {
-		if r.leadTransferee != 0 {
-			message := pb.Message{
-				From:    r.id,
-				To:      r.leadTransferee,
-				Term:    r.Term,
-				MsgType: pb.MessageType_MsgTimeoutNow,
+		// Case1: if follower lack some logs
+		nextIndex := m.Index
+		// Case2: if follower lack some logs and append some other logs
+		if m.LogTerm != None {
+			for i := 0; i < len(r.RaftLog.entries); i++ {
+				if r.RaftLog.entries[i].Term > m.LogTerm {
+					if i > 0 && r.RaftLog.entries[i-1].Term == m.LogTerm {
+						nextIndex = r.RaftLog.FirstIndex() + uint64(i)
+						break
+					}
+				}
 			}
-			r.msgs = append(r.msgs, message)
-			r.leadTransferee = 0
-			return
 		}
-		// update the peer's next
+		r.Prs[m.From].Next = nextIndex
+		r.sendAppend(m.From)
+	} else {
+		// Case3:
 		if m.Index > r.Prs[m.From].Match {
-			r.Prs[m.From].Match = m.Index
-		}
-		if m.Index+1 > r.Prs[m.From].Next {
+			// filter
 			r.Prs[m.From].Next = m.Index + 1
+			r.Prs[m.From].Match = m.Index
+			if r.UpdateCommit() {
+				r.BcastAppend()
+			}
+			if m.Index == r.RaftLog.LastIndex() && r.leadTransferee == m.From {
+				r.sendTimeout(r.leadTransferee)
+			}
 		}
-		r.maybeCommit()
 	}
 }
 
-// handleAppendEntries handle AppendEntries RPC request
-func (r *Raft) handleAppendEntries(m pb.Message) {
-	r.Lead = m.From
-	message := pb.Message{
-		MsgType: pb.MessageType_MsgAppendResponse,
-		To:      m.From,
+func (r *Raft) sendTimeout(to uint64) {
+	msg := pb.Message{
+		MsgType: pb.MessageType_MsgTimeoutNow,
 		From:    r.id,
-		Term:    r.Term,
+		To:      to,
 	}
+	r.msgs = append(r.msgs, msg)
+}
 
-	li := r.RaftLog.LastIndex()
-	term, err := r.RaftLog.Term(m.Index)
-	// li < index , li = 4 index = 6
-	// the follower need send index = 4 back
-	// I: 1 2 3 4 5 6 7
-	//    - - - - - - -
-	// L: 1 1 2 3 4 5 6
-	// F: 1 1 2 3
-	if li < m.Index || err != nil {
-		message.Index = li
-		lastTerm, _ := r.RaftLog.Term(li)
-		message.LogTerm = lastTerm
-		message.Index = li
-		message.Reject = true
-		r.msgs = append(r.msgs, message)
+// BcastAppend broadcast append message to all prs
+func (r *Raft) BcastAppend() {
+	if len(r.Prs) == 1 {
+		lastIndex := r.RaftLog.LastIndex()
+		r.RaftLog.committed = max(r.RaftLog.committed, lastIndex)
 		return
 	}
-	// term == logTerm , term = logTerm = 6
-	// the follower need send index = 4 back
-	// I  1 2 3 4 5 6 7
-	//    - - - - - - -
-	// L: 1 1 2 3 4 5 6 7
-	// F: 1 1 2 3 4 5 6 6 6
-	// or
-	// I  1 2 3 4 5 6 7
-	//    - - - - - - -
-	// L: 1 1 2 3 4 5 6 7
-	// F: 1 1 2 3 4 5 6
-	if term == m.LogTerm {
-		// first add the new entries to node and find the first different entry
-		entries := TransFromPointer(m.Entries)
-		newIndex := m.Index + uint64(len(m.Entries))
-		for i, v := range m.Entries {
-			// when see the new entry break
-			if len(r.RaftLog.entries) == 0 || li < v.Index {
-				r.RaftLog.entries = append(r.RaftLog.entries, entries[i:]...)
-				break
-			}
-			// when find the confict
-			curIndex := v.Index - r.RaftLog.entries[0].Index
-			curEntry := r.RaftLog.entries[curIndex]
-			if bytes.Compare(curEntry.Data, v.Data) != 0 ||
-				curEntry.Term != v.Term {
-				r.RaftLog.entries = append(r.RaftLog.entries[:curIndex], entries[i:]...)
-				r.RaftLog.stabled = curEntry.Index - 1
-				break
-			}
+	for i := range r.Prs {
+		if i == r.id {
+			continue
 		}
-		message := pb.Message{
-			MsgType: pb.MessageType_MsgAppendResponse,
-			To:      m.From,
-			From:    r.id,
-			Term:    r.Term,
-			Index:   r.RaftLog.LastIndex(),
-		}
-		r.msgs = append(r.msgs, message)
+		r.sendAppend(i)
+	}
+}
 
-		if m.Commit > r.RaftLog.committed {
-			if newIndex < m.Commit {
-				r.RaftLog.committed = newIndex
+// UpdateCommit update raft.committed Leader
+func (r *Raft) UpdateCommit() bool {
+	cntAll := 0
+	var commits []uint64
+	for _, v := range r.Prs {
+		cntAll++
+		commits = append(commits, v.Match)
+	}
+	sortkeys.Uint64s(commits)
+	older := r.RaftLog.committed
+	maybeNewCommit := commits[int((cntAll-1)/2)]
+	if older >= maybeNewCommit {
+		return false
+	} else {
+		maybeNewTerm, err := r.RaftLog.Term(maybeNewCommit)
+		if err != nil {
+			log.Info("UpdateCommit call Term with ErrCompacted or ErrUnavailable")
+			return false
+		} else {
+			if maybeNewTerm != r.Term {
+				return false
 			} else {
-				r.RaftLog.committed = m.Commit
+				r.RaftLog.committed = max(r.RaftLog.committed, maybeNewCommit)
+				return true
 			}
+		}
+
+	}
+}
+
+// handleAppendEntries handle AppendEntries RPC request. Type: MessageType_MsgAppend
+func (r *Raft) handleAppendEntries(m pb.Message) {
+	// Your Code Here (2A)
+	msg := pb.Message{
+		From:    r.id,
+		To:      m.From,
+		MsgType: pb.MessageType_MsgAppendResponse,
+		Reject:  false,
+		Term:    r.Term,
+		Index:   m.Index,
+	}
+	// should not have MsgAppend which m.Term == None
+	if m.Term == None {
+		log.Warn("WARN: handleAppendEntries m.Term == None")
+		panic(errors.New("handleAppendEntries m.Term == None"))
+	}
+	if StateCandidate == r.State {
+		r.becomeFollower(m.Term, m.From)
+	}
+	if m.Term < r.Term {
+		// old leader send old Term's Entry to Append
+		msg.Reject = true
+		msg.Term = uint64(0)
+		msg.Index = uint64(0)
+		r.msgs = append(r.msgs, msg)
+		return
+	} else if m.Term > r.Term {
+		r.becomeFollower(m.Term, m.From)
+	}
+	r.electionElapsed = 0
+	r.Lead = m.From
+
+	// Case3: Follower doesn't have Leader's Log(m.Index==Leader's PrevLogIndex, >local's LastIndex)
+	// should resend from LastIndex+1
+	// // NNNOTE: this is a problem I never thought of lol...
+	// if m.Index > r.RaftLog.LastIndex() ||
+	// 	// has a pendingSnapshot and will cover some entries Leader sent
+	// 	(r.RaftLog.pendingSnapshot != nil && m.Index < r.RaftLog.pendingSnapshot.Metadata.Index) ||
+	// 	// doesn't have a pendingSnapshot? and send some entries that has been apply from
+	// 	// last snapshot or compact by LogCompact operation
+	// 	(m.Index < r.RaftLog.committed) {
+	// 	msg.Reject = true
+	// 	msg.Index = r.RaftLog.LastIndex() + 1
+	// 	msg.LogTerm = None
+	// 	r.msgs = append(r.msgs, msg)
+	// 	return
+	// }
+
+	// this overlap with Case3, should not happend
+	localPrevLogTerm, err := r.RaftLog.Term(m.Index)
+	if err != nil {
+		msg.Reject = true
+		msg.Index = r.RaftLog.LastIndex() + 1
+		msg.LogTerm = None
+		r.msgs = append(r.msgs, msg)
+		return
+	}
+	// Case2: Follower have other Term's Log (conflict)
+	// should return localPrevLogTerm's first Log's Index&Term
+	// search in r.RaftLog.entries
+	if localPrevLogTerm != m.LogTerm {
+		msg.Reject = true
+		retLogIndex, retLogTerm := m.Index+1, localPrevLogTerm
+		if len(r.RaftLog.entries) != 0 {
+			for i := 0; i <= int(m.Index)-int(r.RaftLog.FirstIndex()); i++ {
+				if r.RaftLog.entries[i].Term == localPrevLogTerm {
+					retLogIndex = r.RaftLog.entries[i].Index
+					break
+				}
+			}
+		}
+		msg.LogTerm, msg.Index = retLogTerm, retLogIndex
+		r.msgs = append(r.msgs, msg)
+		return
+	}
+
+	if len(r.RaftLog.entries) == 0 {
+		for i := 0; i < len(m.Entries); i++ {
+			r.RaftLog.entries = append(r.RaftLog.entries, *m.Entries[i])
 		}
 	} else {
-		message.Reject = true
-		// logTerm , term not equal, logTerm = 6 and index = 7
-		// if the term between leader and follower are not equal
-		// recall the first index whose term <= logTerm and
-		// I  1 2 3 4 5 6 7 8
-		//    - - - - - - - -
-		// L: 1 1 2 3 4 5 6 7
-		// F: 1 1 2 3 4 4 4 4
-		if term < m.LogTerm {
-			message.LogTerm = term
-			message.Index = m.Index
-			r.msgs = append(r.msgs, message)
-			return
-		} else {
-			// term > logTerm
-			// this time we should return the newest Index whose Term <= LogTerm
-			// I  1 2 3 4 5 6 7 8
-			//    - - - - - - - -
-			// L: 1 1 2 3 4 5 5 7
-			// F: 1 1 2 3 6 6 6 6
-			// L: 1 3
-			// F: 2
-			hintIndex := min(m.Index, r.RaftLog.LastIndex())
-			hintIndex = r.RaftLog.findConflictByTerm(hintIndex, m.LogTerm)
-			hintTerm, err := r.RaftLog.Term(hintIndex)
-			if err != nil {
-				panic(err)
+		// NOTE: if local entries have more log than m.entries, [m.entries.last,local.entries.last] will not be truncated.
+		for i, ent := range m.Entries {
+			localTerm, err := r.RaftLog.Term(ent.Index)
+			if err != nil || localTerm != ent.Term {
+				// given TruncateIndex should >= Leader's committed Index >= Follower's committed Index >= applied Index
+				if ent.Index <= r.RaftLog.committed {
+					log.Error("ERROR: handleAppendEntries m.Index < r.RaftLog.committed")
+					panic("handleAppendEntries m.Index < r.RaftLog.committed")
+				}
+				if ent.Index <= r.RaftLog.applied {
+					log.Info("ERROR: Follower's Raftlog appliedIndex > Leader's PrevLogIndex")
+					panic(errors.New(" Follower's Raftlog appliedIndex > Leader's PrevLogIndex"))
+				}
+				// 'if' should be [if m.index >= r.RaftLog.FirstIndex()-1], forgot -1
+				if ent.Index <= r.RaftLog.FirstIndex()-1 {
+					log.Info("ERROR: handleAppendEntries try to append Entries which have been apply and compact")
+					panic(fmt.Sprintf("handleAppendEntries try to append Entries which have been apply and compact %v %v", m.Index, r.RaftLog.FirstIndex()))
+				}
+				r.RaftLog.stabled = min(r.RaftLog.stabled, ent.Index-1)
+				r.RaftLog.entries = r.RaftLog.entries[:int(ent.Index)-int(r.RaftLog.FirstIndex())]
+				for j := i; j < len(m.Entries); j++ {
+					r.RaftLog.entries = append(r.RaftLog.entries, *m.Entries[j])
+				}
+				break
 			}
-			message.Index = hintIndex
-			message.LogTerm = hintTerm
-			r.msgs = append(r.msgs, message)
 		}
 	}
+	msg.Index = r.RaftLog.LastIndex()
+	// MsgAppend: update r.RaftLog.committed according m.Commit
+	if r.RaftLog.committed < m.Commit {
+		lastNewIndex := uint64(len(m.Entries)) + m.Index
+		r.RaftLog.committed = min(m.Commit, lastNewIndex)
+	}
+	r.msgs = append(r.msgs, msg)
 }
 
 // handleHeartbeat handle Heartbeat RPC request
