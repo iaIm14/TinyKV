@@ -23,9 +23,9 @@ import (
 
 // RaftLog manage the log entries, its struct look like:
 //
-//  snapshot/first.....applied....committed....stabled.....last
-//  --------|------------------------------------------------|
-//                            log entries
+//	snapshot/first.....applied....committed....stabled.....last
+//	--------|------------------------------------------------|
+//	                          log entries
 //
 // for simplify the RaftLog implement should manage all log entries
 // that not truncated
@@ -101,11 +101,11 @@ func (l *RaftLog) maybeCompact() {
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
-	if l.stabled > l.LastIndex() {
-		panic("unstableEntries error!")
-	}
-	if len(l.entries) == 0 || l.stabled == l.LastIndex() {
+	if len(l.entries) == 0 {
 		return []pb.Entry{}
+	}
+	if l.stabled > l.LastIndex() {
+		panic("unstableEntries")
 	}
 	firstIndex := l.entries[0].Index
 	if l.stabled < firstIndex-1 {
@@ -121,10 +121,10 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		return nil
 	}
 	firstIndex := l.entries[0].Index
-	if int(l.committed-firstIndex+1) < 0 {
+	if l.committed+1 < firstIndex {
 		panic("nextEnts error!")
 	}
-	if l.applied < firstIndex-1 {
+	if l.applied+1 < firstIndex {
 		panic(errors.New("nextEnts l.applied < firstIndex-1"))
 	}
 	if l.applied > l.committed {
