@@ -57,7 +57,7 @@ type RaftLog struct {
 
 // newLog returns log using the given storage. It recovers the log
 // to the state that it just commits and applies the latest snapshot.
-func newLog(storage Storage) *RaftLog {
+func newLog(storage Storage, applied uint64) *RaftLog {
 	raftLog := RaftLog{}
 	state, _, _ := storage.InitialState()
 	lastIndex, err := storage.LastIndex()
@@ -70,7 +70,7 @@ func newLog(storage Storage) *RaftLog {
 	}
 	raftLog.stabled = lastIndex
 	raftLog.committed = state.Commit
-	raftLog.applied = firstIndex - 1
+	raftLog.applied = min(firstIndex-1, applied)
 	raftLog.storage = storage
 	entries, err := storage.Entries(firstIndex, lastIndex+1)
 	if err != nil {
@@ -134,81 +134,77 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	return
 }
 
-// LastIndex return the last index of the log entries
-func (l *RaftLog) LastIndex() uint64 {
-	if l.lenEntries() > 0 {
-		return l.entries[0].Index + l.lenEntries() - 1
-	} else {
-		if !IsEmptySnap(l.pendingSnapshot) {
-			return l.pendingSnapshot.Metadata.Index
-		}
-		// find it from snap
-		lastIndex, _ := l.storage.LastIndex()
-		return lastIndex
-	}
-}
-
-// FirstIndex return the first index of the log entries
+// FirstIndex == raftlog.entries[0].index or 0
 func (l *RaftLog) FirstIndex() uint64 {
-	if l.lenEntries() > 0 {
-		return l.entries[0].Index
-	} else {
+	if len(l.entries) == 0 {
 		firstIndex, _ := l.storage.FirstIndex()
 		return firstIndex
 	}
+	return l.entries[0].Index
 }
 
-// lenEntries return the length of entries
-func (l *RaftLog) lenEntries() uint64 {
-	return uint64(len(l.entries))
-}
-
-// Term return the term of the entry in the given index
-func (l *RaftLog) splitEntries(i uint64) (ents []pb.Entry) {
-	if l.lenEntries() == 0 {
-		return
+// LastIndex return the last index of the log entries
+func (l *RaftLog) LastIndex() uint64 {
+	// Your Code Here (2A).
+	// stale snapshot discarded. debuginfo
+	var pendingSnapshotIndex uint64 = 0
+	var raftlogIndex uint64 = 0
+	var storageIndex uint64 = 0
+	if !IsEmptySnap(l.pendingSnapshot) {
+		pendingSnapshotIndex = l.pendingSnapshot.Metadata.Index
+	}
+	if len(l.entries) > 0 {
+		raftlogIndex = l.entries[len(l.entries)-1].Index
+	}
+	storageIndex, _ = l.storage.LastIndex()
+	if raftlogIndex != 0 {
+		// log.Info("lastindex return raftlogIndex")
+		return raftlogIndex
+	} else if pendingSnapshotIndex != 0 {
+		// log.Info("lastindex return pendingSnapshotIndex")
+		return pendingSnapshotIndex
+	} else if storageIndex != 0 {
+		// log.Info("lastindex return storageIndex")
+		return storageIndex
 	} else {
-		index := i - l.entries[0].Index
-		ents = l.entries[index:]
-		return
+		log.Info("WARN: lastindex return 0")
+		return 0
 	}
 }
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
-	// fmt.Println(l.LastIndex())
-	s := l.pendingSnapshot
-	if s != nil && s.Metadata.Index == i {
+	// Your Code Here (2A).
+
+	// in Raftlog.entries
+	if len(l.entries) > 0 && i >= l.entries[0].Index && i <= l.entries[len(l.entries)-1].Index {
+		return l.entries[l.entIdx2slcIdx(i)].Term, nil
+	}
+	if !IsEmptySnap(l.pendingSnapshot) && l.pendingSnapshot.Metadata.Index == i {
 		return l.pendingSnapshot.Metadata.Term, nil
 	}
-	if i > l.LastIndex() {
-		return 0, ErrUnavailable
-	}
-	if l.lenEntries() == 0 || i < l.FirstIndex() {
-		return l.storage.Term(i)
-	}
-	return l.entries[i-l.FirstIndex()].Term, nil
+	// i not in Raftlog.entries, should search in storage
+	// if >lastIndex or <FirstIndex() will return 0,ErrCompacted or ErrUnavailable (MemoryStorage)
+	// to pass test, should let it return
+	return l.storage.Term(i)
 }
 
 func (l RaftLog) getEntries(index uint64) []pb.Entry {
-	firstIndex := l.FirstIndex()
-	lastIndex := l.LastIndex()
-	if index < firstIndex || index > lastIndex {
+	if len(l.entries) == 0 {
 		return nil
 	}
-	return l.entries[index-firstIndex:]
+	if index < l.entries[0].Index || index > l.entries[len(l.entries)-1].Index {
+		return nil
+	}
+	return l.entries[index-l.entries[0].Index:]
 }
 
-func (l RaftLog) findConflictByTerm(index uint64, term uint64) uint64 {
-	if li := l.LastIndex(); index > li {
-		return index
-	}
-	for {
-		logTerm, err := l.Term(index)
-		if logTerm <= term || err != nil {
-			break
-		}
-		index--
-	}
-	return index
+// LastTerm return last term
+func (l *RaftLog) LastTerm() (uint64, error) {
+	lastIndex := l.LastIndex()
+	return l.Term(lastIndex)
+}
+
+func (l *RaftLog) entIdx2slcIdx(i uint64) int {
+	return int(i - l.FirstIndex())
 }

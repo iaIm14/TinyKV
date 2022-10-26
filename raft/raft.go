@@ -180,7 +180,7 @@ func newRaft(c *Config) *Raft {
 	if c.peers == nil {
 		c.peers = confState.Nodes
 	}
-	raftLog := newLog(c.Storage)
+	raftLog := newLog(c.Storage, c.Applied)
 	for i := range c.peers {
 		peers[c.peers[i]] = &Progress{
 			0, raftLog.LastIndex() + 1,
@@ -841,6 +841,20 @@ func (r *Raft) addNode(id uint64) {
 		Next:  r.RaftLog.LastIndex() + 1,
 	}
 	r.PendingConfIndex = None
+}
+
+func (l RaftLog) findConflictByTerm(index uint64, term uint64) uint64 {
+	if li := l.LastIndex(); index > li {
+		return index
+	}
+	for {
+		logTerm, err := l.Term(index)
+		if logTerm <= term || err != nil {
+			break
+		}
+		index--
+	}
+	return index
 }
 
 // removeNode remove a node from raft group
