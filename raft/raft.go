@@ -431,14 +431,10 @@ func (r *Raft) handleRequestVote(m pb.Message) {
 		Reject:  false,
 		MsgType: pb.MessageType_MsgRequestVoteResponse,
 	}
-	if m.Term < r.Term {
-		msg.Reject = true
-		r.msgs = append(r.msgs, msg)
-		return
-	}
-	canVote := (r.Vote == None && r.Lead == None) || (r.Vote == m.From)
-	lastTerm, _ := r.RaftLog.LastTerm()
-	isUptoDate := (m.LogTerm > lastTerm || (m.LogTerm == lastTerm && m.Index >= r.RaftLog.LastIndex()))
+	lastIndex := r.RaftLog.LastIndex()
+	lastTerm, _ := r.RaftLog.Term(lastIndex)
+	canVote := (r.Vote == None || r.Vote == m.From)
+	isUptoDate := (m.LogTerm > lastTerm || (m.LogTerm == lastTerm && m.Index >= lastIndex))
 	rejected := !(canVote && isUptoDate)
 	if rejected {
 		msg.Reject = true
@@ -773,41 +769,43 @@ func (r *Raft) StepLeader(m pb.Message) error {
 	return nil
 }
 
+// Step the entrance of handle message, see `MessageType`
+// on `eraftpb.proto` for what msgs should be handled
 func (r *Raft) Step(m pb.Message) error {
-	// Your Code Here (2A)
-	switch {
-	case m.Term == 0:
+	// Your Code Here (2A).
+	if m.Term == 0 {
 		// local message
-		// note: include MsgTransferLeader
-	case m.Term > r.Term:
+		// MsgBeat || MsgHup || MsgPropose || MsgReadIndex || MsgTransferLeader
+	} else if m.Term > r.Term {
 		if m.MsgType == pb.MessageType_MsgAppend || m.MsgType == pb.MessageType_MsgHeartbeat || m.MsgType == pb.MessageType_MsgSnapshot {
 			r.becomeFollower(m.Term, m.From)
 		} else {
 			r.becomeFollower(m.Term, None)
 		}
-	case m.Term < r.Term:
-		// NOTE: every type of scaled Msg could be received. most of them should not be handled.
+	} else if m.Term < r.Term {
 		switch m.MsgType {
 		case pb.MessageType_MsgRequestVote:
+			r.msgs = append(r.msgs, pb.Message{MsgType: pb.MessageType_MsgRequestVoteResponse, Term: r.Term, From: r.id, To: m.From, Reject: true})
 		case pb.MessageType_MsgHeartbeat:
+			r.msgs = append(r.msgs, pb.Message{MsgType: pb.MessageType_MsgHeartbeatResponse, Term: r.Term, From: r.id, To: m.From})
 		case pb.MessageType_MsgAppend:
+			r.msgs = append(r.msgs, pb.Message{MsgType: pb.MessageType_MsgAppendResponse, Term: r.Term, From: r.id, To: m.From, Reject: true})
 		case pb.MessageType_MsgSnapshot:
-			r.msgs = append(r.msgs, pb.Message{MsgType: pb.MessageType_MsgAppendResponse, To: m.From, From: r.id, Term: r.Term, Reject: true})
-			return nil
-		default:
-			return nil
+			r.msgs = append(r.msgs, pb.Message{MsgType: pb.MessageType_MsgAppendResponse, Term: r.Term, From: r.id, To: m.From, Reject: true})
 		}
-	}
-	switch r.State {
-	case StateFollower:
-		return r.StepFollower(m)
-	case StateCandidate:
-		return r.StepCandidate(m)
-	case StateLeader:
-		return r.StepLeader(m)
-	default:
 		return nil
 	}
+	// now m.Term == r.Term as we return when m.Term < r.Term
+	var err error = nil
+	switch r.State {
+	case StateFollower:
+		err = r.StepFollower(m)
+	case StateCandidate:
+		err = r.StepCandidate(m)
+	case StateLeader:
+		err = r.StepLeader(m)
+	}
+	return err
 }
 
 // handleAppendEntries handle AppendEntries RPC request. Type: MessageType_MsgAppend

@@ -15,8 +15,6 @@
 package raft
 
 import (
-	"errors"
-
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 	"github.com/pingcap/log"
 )
@@ -70,7 +68,7 @@ func newLog(storage Storage, applied uint64) *RaftLog {
 	}
 	raftLog.stabled = lastIndex
 	raftLog.committed = state.Commit
-	raftLog.applied = min(firstIndex-1, applied)
+	raftLog.applied = max(firstIndex-1, applied)
 	raftLog.storage = storage
 	entries, err := storage.Entries(firstIndex, lastIndex+1)
 	raftLog.entries = entries
@@ -122,7 +120,7 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		panic("nextEnts error!")
 	}
 	if l.applied+1 < firstIndex {
-		panic(errors.New("nextEnts l.applied < firstIndex-1"))
+		// panic(errors.New("nextEnts l.applied < firstIndex-1"))
 		return nil
 	}
 	if l.applied > l.committed {
