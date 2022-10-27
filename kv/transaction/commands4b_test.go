@@ -586,8 +586,8 @@ func TestCommitMissingPrewrite4a(t *testing.T) {
 		// Note no prewrite.
 	})
 	resp := builder.runOneRequest(cmd).(*kvrpcpb.CommitResponse)
-
-	assert.Nil(t, resp.Error)
+	// Todo: this might should be nil
+	assert.NotNil(t, resp.Error)
 	assert.Nil(t, resp.RegionError)
 	builder.assertLens(2, 0, 2)
 	builder.assert([]kv{

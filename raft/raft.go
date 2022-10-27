@@ -191,15 +191,16 @@ func newRaft(c *Config) *Raft {
 	}
 	// Your Code Here (2A).
 	r := &Raft{
-		id:               c.ID,
-		RaftLog:          newLog(c.Storage, c.Applied),
-		Prs:              make(map[uint64]*Progress),
-		State:            StateFollower, //
-		votes:            make(map[uint64]bool),
-		msgs:             make([]pb.Message, 0),
+		id:      c.ID,
+		RaftLog: newLog(c.Storage),
+		Prs:     make(map[uint64]*Progress),
+		State:   StateFollower, //
+		votes:   make(map[uint64]bool),
+		// msgs:             make([]pb.Message, 0),
 		heartbeatTimeout: c.HeartbeatTick,
 		electionTimeout:  c.ElectionTick,
 	}
+	r.RaftLog.applied = max(c.Applied, r.RaftLog.applied)
 	lastIndex := r.RaftLog.LastIndex()
 	hardState, confState, _ := r.RaftLog.storage.InitialState()
 	r.Term, r.Vote, r.RaftLog.committed = hardState.Term, hardState.Vote, hardState.Commit
@@ -995,6 +996,7 @@ func (r *Raft) handleSnapshot(m pb.Message) {
 // addNode add a new node to raft group
 func (r *Raft) addNode(id uint64) {
 	// Your Code Here (3A).
+	r.PendingConfIndex = None
 	if r.Prs[id] != nil {
 		return
 	}
@@ -1006,13 +1008,13 @@ func (r *Raft) addNode(id uint64) {
 		SnapshotTicker: 0,
 		SnapLastIndex:  0,
 	}
-	r.PendingConfIndex = None
 }
 
 // removeNode remove a node from raft group
 func (r *Raft) removeNode(id uint64) {
 	// Your Code Here (3A).
 	removeable := false
+	r.PendingConfIndex = None
 	if _, ok := r.Prs[id]; ok {
 		removeable = true
 	}
@@ -1021,7 +1023,6 @@ func (r *Raft) removeNode(id uint64) {
 	// removeable = removeable && (len(r.Prs) >= 1)
 	if removeable {
 		delete(r.Prs, id)
-		r.PendingConfIndex = None
 		if r.State == StateLeader && r.id != id {
 			if r.UpdateCommit() {
 				r.BcastAppend()

@@ -55,7 +55,7 @@ type RaftLog struct {
 
 // newLog returns log using the given storage. It recovers the log
 // to the state that it just commits and applies the latest snapshot.
-func newLog(storage Storage, applied uint64) *RaftLog {
+func newLog(storage Storage) *RaftLog {
 	raftLog := RaftLog{}
 	state, _, _ := storage.InitialState()
 	lastIndex, err := storage.LastIndex()
@@ -68,13 +68,11 @@ func newLog(storage Storage, applied uint64) *RaftLog {
 	}
 	raftLog.stabled = lastIndex
 	raftLog.committed = state.Commit
-	raftLog.applied = max(firstIndex-1, applied)
+	raftLog.applied = firstIndex - 1
 	raftLog.storage = storage
-	entries, err := storage.Entries(firstIndex, lastIndex+1)
+	// only dummy entry. see MemoryStorage.Entries
+	entries, _ := storage.Entries(firstIndex, lastIndex+1)
 	raftLog.entries = entries
-	if err != nil {
-		log.Fatal(err.Error())
-	}
 	return &raftLog
 }
 
@@ -142,30 +140,17 @@ func (l *RaftLog) FirstIndex() uint64 {
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
-	// stale snapshot discarded. debuginfo
-	var pendingSnapshotIndex uint64 = 0
-	var raftlogIndex uint64 = 0
-	var storageIndex uint64 = 0
-	if !IsEmptySnap(l.PendingSnapshot) {
-		pendingSnapshotIndex = l.PendingSnapshot.Metadata.Index
-	}
 	if len(l.entries) > 0 {
-		raftlogIndex = l.entries[len(l.entries)-1].Index
+		return l.entries[len(l.entries)-1].Index
 	}
-	storageIndex, _ = l.storage.LastIndex()
-	if raftlogIndex != 0 {
-		// log.Info("lastindex return raftlogIndex")
-		return raftlogIndex
-	} else if pendingSnapshotIndex != 0 {
-		// log.Info("lastindex return pendingSnapshotIndex")
-		return pendingSnapshotIndex
-	} else if storageIndex != 0 {
-		// log.Info("lastindex return storageIndex")
-		return storageIndex
-	} else {
-		log.Info("WARN: lastindex return 0")
+	if l.PendingSnapshot != nil {
+		return l.PendingSnapshot.Metadata.Index
+	}
+	lastindex, err := l.storage.LastIndex()
+	if err != nil {
 		return 0
 	}
+	return lastindex
 }
 
 // Term return the term of the entry in the given index
