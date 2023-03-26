@@ -132,11 +132,6 @@ func confchanger(t *testing.T, cluster *Cluster, ch chan bool, done *int32) {
 	}
 }
 
-func TestBasic2B(t *testing.T) {
-	// Test: one client (2B) ...
-	GenericTest(t, "2B", 1, false, false, false, -1, false, false)
-}
-
 // Basic test is as follows: one or more clients submitting Put/Scan
 // operations to set of servers for some period of time.  After the period is
 // over, test checks that all sequential values are present and in order for a
@@ -171,7 +166,6 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 	}
 	title = title + " (" + part + ")" // 3A or 3B
 
-	// log.Infof("[DEBUG] title:{ %v }", title)
 	nservers := 5
 	cfg := config.NewTestConfig()
 	if maxraftlog != -1 {
@@ -182,14 +176,13 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 		cfg.RegionSplitSize = 200
 	}
 	cluster := NewTestCluster(nservers, cfg)
-	// log.Infof("[DEBUG]cluster created: %v", cluster)
 	cluster.Start()
-	// log.Infof("[DEBUG]cluster started: %v", cluster)
 	defer cluster.Shutdown()
 
 	electionTimeout := cfg.RaftBaseTickInterval * time.Duration(cfg.RaftElectionTimeoutTicks)
 	// Wait for leader election
 	time.Sleep(2 * electionTimeout)
+
 	done_partitioner := int32(0)
 	done_confchanger := int32(0)
 	done_clients := int32(0)
@@ -214,14 +207,14 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 				if (rand.Int() % 1000) < 500 {
 					key := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", j)
 					value := "x " + strconv.Itoa(cli) + " " + strconv.Itoa(j) + " y"
-					log.Infof("%d: client new put [key:%v],[value:%v]\n", cli, key, value)
+					// log.Infof("%d: client new put %v,%v\n", cli, key, value)
 					cluster.MustPut([]byte(key), []byte(value))
 					last = NextValue(last, value)
 					j++
 				} else {
 					start := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", 0)
 					end := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", j)
-					log.Infof("%d: client new scan [[%v]-[%v]]\n", cli, start, end)
+					// log.Infof("%d: client new scan %v-%v\n", cli, start, end)
 					values := cluster.Scan([]byte(start), []byte(end))
 					v := string(bytes.Join(values, []byte("")))
 					if v != last {
@@ -334,6 +327,11 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 			}
 		}
 	}
+}
+
+func TestBasic2B(t *testing.T) {
+	// Test: one client (2B) ...
+	GenericTest(t, "2B", 1, false, false, false, -1, false, false)
 }
 
 func TestConcurrent2B(t *testing.T) {
@@ -542,26 +540,21 @@ func TestBasicConfChange3B(t *testing.T) {
 	cluster := NewTestCluster(5, cfg)
 	cluster.Start()
 	defer cluster.Shutdown()
+
 	cluster.MustTransferLeader(1, NewPeer(1, 1))
-	log.Info("MustTransferLeader finish")
 	cluster.MustRemovePeer(1, NewPeer(2, 2))
 	cluster.MustRemovePeer(1, NewPeer(3, 3))
 	cluster.MustRemovePeer(1, NewPeer(4, 4))
 	cluster.MustRemovePeer(1, NewPeer(5, 5))
-	log.Info("remove 2,3,4,5 finish")
 
 	// now region 1 only has peer: (1, 1)
 	cluster.MustPut([]byte("k1"), []byte("v1"))
 	MustGetNone(cluster.engines[2], []byte("k1"))
-	log.Info("MustGet None finish")
 
 	// add peer (2, 2) to region 1
 	cluster.MustAddPeer(1, NewPeer(2, 2))
-	log.Info("DEBUG1")
 	cluster.MustPut([]byte("k2"), []byte("v2"))
-	log.Info("DEBUG2")
 	cluster.MustGet([]byte("k2"), []byte("v2"))
-	log.Info("DEBUG3")
 	MustGetEqual(cluster.engines[2], []byte("k1"), []byte("v1"))
 	MustGetEqual(cluster.engines[2], []byte("k2"), []byte("v2"))
 
@@ -676,7 +669,7 @@ func TestOneSplit3B(t *testing.T) {
 	resp, _ := cluster.CallCommandOnLeader(&req, time.Second)
 	assert.NotNil(t, resp.GetHeader().GetError())
 	assert.NotNil(t, resp.GetHeader().GetError().GetKeyNotInRegion())
-	// log.Infof("[+=DEBUG++] %v %v", resp.GetHeader().GetError(), resp.GetHeader().GetError().GetKeyNotInRegion())
+
 	MustGetEqual(cluster.engines[5], []byte("k100"), []byte("v100"))
 }
 

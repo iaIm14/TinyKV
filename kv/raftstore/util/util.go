@@ -142,7 +142,7 @@ func FindPeer(region *metapb.Region, storeID uint64) *metapb.Peer {
 
 func RemovePeer(region *metapb.Region, storeID uint64) *metapb.Peer {
 	for i, peer := range region.Peers {
-		if peer.StoreId == storeID {
+		if peer.Id == storeID {
 			region.Peers = append(region.Peers[:i], region.Peers[i+1:]...)
 			return peer
 		}
